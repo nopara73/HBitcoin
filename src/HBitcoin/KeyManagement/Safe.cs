@@ -42,9 +42,9 @@ namespace HBitcoin.KeyManagement
 		/// <summary> If the wallet only differs by CreationTime, the UniqueId will be the same </summary>
 		public string UniqueId => BitcoinExtPubKey.ExtPubKey.PubKey.GetAddress(Network).ToWif();
 
-		private string WalletName { get; }
-		private static string GenerateWalletFilePath(string walletName) => Path.Combine("Wallets", $"{walletName}.json");
-		public string WalletFilePath => GenerateWalletFilePath(WalletName);
+		public string WalletName { get; }
+		public static string GetWalletFilePath(string walletName) => Path.Combine("Wallets", $"{walletName}.json");
+		public string WalletFilePath => GetWalletFilePath(WalletName);
 
 		protected Safe(string password, string walletName, Network network, DateTimeOffset creationTime, Mnemonic mnemonic = null)
 		{
@@ -83,7 +83,7 @@ namespace HBitcoin.KeyManagement
 
 			mnemonic = safe.SetSeed(password);
 
-			safe.Save(password, GenerateWalletFilePath(walletName), network, creationTime);
+			safe.Save(password, GetWalletFilePath(walletName), network, creationTime);
 
 			return safe;
 		}
@@ -91,7 +91,7 @@ namespace HBitcoin.KeyManagement
 		public static Safe Recover(Mnemonic mnemonic, string password, string walletName, Network network, DateTimeOffset creationTime)
 		{
 			var safe = new Safe(password, walletName, network, creationTime, mnemonic);
-			safe.Save(password, GenerateWalletFilePath(walletName), network, safe.CreationTime);
+			safe.Save(password, GetWalletFilePath(walletName), network, safe.CreationTime);
 			return safe;
 		}
 
@@ -134,7 +134,7 @@ namespace HBitcoin.KeyManagement
 
 		public static Safe Load(string password, string walletName)
 		{
-			var walletFilePath = GenerateWalletFilePath(walletName);
+			var walletFilePath = GetWalletFilePath(walletName);
 			if (!File.Exists(walletFilePath))
 				throw new ArgumentException($"No wallet file found at {walletFilePath}");
 
