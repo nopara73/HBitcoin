@@ -10,8 +10,7 @@ namespace HBitcoin.KeyManagement
 		public Network Network { get; }
 		public DateTimeOffset CreationTime { get; }
 
-		private ExtKey _extKey;
-		public ExtKey ExtKey => _extKey;
+		public ExtKey ExtKey { get; private set; }
 		public BitcoinExtPubKey BitcoinExtPubKey => ExtKey.Neuter().GetWif(Network);
 		public BitcoinExtKey BitcoinExtKey => ExtKey.GetWif(Network);
 
@@ -58,7 +57,7 @@ namespace HBitcoin.KeyManagement
 		{
 			Network = safe.Network;
 			CreationTime = safe.CreationTime;
-			_extKey = safe.ExtKey;
+			ExtKey = safe.ExtKey;
 			WalletFilePath = safe.WalletFilePath;
 		}
 
@@ -93,14 +92,14 @@ namespace HBitcoin.KeyManagement
 		{
 			mnemonic = mnemonic ?? new Mnemonic(Wordlist.English, WordCount.Twelve);
 
-			_extKey = mnemonic.DeriveExtKey(password);
+			ExtKey = mnemonic.DeriveExtKey(password);
 
 			return mnemonic;
 		}
 
 		private void SetSeed(ExtKey seedExtKey)
 		{
-			_extKey = seedExtKey;
+			ExtKey = seedExtKey;
 		}
 
 		private void Save(string password, string walletFilePath, Network network, DateTimeOffset creationTime)
@@ -160,22 +159,6 @@ namespace HBitcoin.KeyManagement
 			return safe;
 		}
 
-		#region Hierarchy
-
-		private const string StealthPath = "0'";
-		private const string ReceiveHdPath = "1'";
-		private const string ChangeHdPath = "2'";
-		private const string NonHardenedHdPath = "3";
-
-		public enum HdPathType
-		{
-			Receive,
-			Change,
-			NonHardened
-		}
-
-		#endregion Hierarchy
-
 		public BitcoinExtKey FindPrivateKey(BitcoinAddress address, int stopSearchAfterIteration = 100000)
 		{
 			for (int i = 0; i < stopSearchAfterIteration; i++)
@@ -193,20 +176,15 @@ namespace HBitcoin.KeyManagement
 
 		public BitcoinExtKey GetPrivateKey(int index, HdPathType hdPathType = HdPathType.Receive)
 		{
-			KeyPath keyPath;
-			if (hdPathType == HdPathType.Receive)
+			string firstPart = Hierarchy.GetPathString(hdPathType);
+			string lastPart;
+			if(hdPathType == HdPathType.NonHardened)
 			{
-				keyPath = new KeyPath($"{ReceiveHdPath}/{index}'");
+				lastPart = $"/{index}";
 			}
-			else if (hdPathType == HdPathType.Change)
-			{
-				keyPath = new KeyPath($"{ChangeHdPath}/{index}'");
-			}
-			else if (hdPathType == HdPathType.NonHardened)
-			{
-				keyPath = new KeyPath($"{NonHardenedHdPath}/{index}");
-			}
-			else throw new Exception("HdPathType not exists");
+			else lastPart = $"/{index}'";
+
+			KeyPath keyPath = new KeyPath(firstPart + lastPart);
 
 			return ExtKey.Derive(keyPath).GetWif(Network);
 		}
