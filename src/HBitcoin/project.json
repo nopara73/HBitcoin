@@ -1,5 +1,5 @@
 {
-  "version": "0.1.1",
+  "version": "0.1.2",
   "title": "HBitcoin",
   "copyright": "MIT",
   "description": "Privacy focused Bitcoin library on top of NBitcoin for .NET Core.",
