@@ -86,9 +86,21 @@ namespace HBitcoin.KeyManagement
 			return safe;
 		}
 
-		public static Safe Recover(Mnemonic mnemonic, string password, string walletFilePath, Network network, DateTimeOffset creationTime)
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="mnemonic"></param>
+		/// <param name="password"></param>
+		/// <param name="walletFilePath"></param>
+		/// <param name="network"></param>
+		/// <param name="creationTime">if null then will default to EarliestPossibleCreationTime</param>
+		/// <returns></returns>
+		public static Safe Recover(Mnemonic mnemonic, string password, string walletFilePath, Network network, DateTimeOffset? creationTime = null)
 		{
-			var safe = new Safe(password, walletFilePath, network, creationTime, mnemonic);
+			if(creationTime == null)
+				creationTime = EarliestPossibleCreationTime;
+
+			var safe = new Safe(password, walletFilePath, network, (DateTimeOffset)creationTime, mnemonic);
 			safe.Save(password, walletFilePath, network, safe.CreationTime);
 			return safe;
 		}
