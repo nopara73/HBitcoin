@@ -1,5 +1,5 @@
 # HBitcoin
-Privacy focused Bitcoin library on top of NBitcoin for .NET Core. `H` stands for `Hidden`.
+Privacy focused Bitcoin library on top of NBitcoin for .NET Core. "H" stands for "Hidden".
 
 ##[Nuget](https://www.nuget.org/packages/HBitcoin)
 
