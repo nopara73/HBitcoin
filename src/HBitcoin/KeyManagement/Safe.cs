@@ -18,18 +18,18 @@ namespace HBitcoin.KeyManagement
 		public BitcoinExtPubKey BitcoinExtPubKey => ExtKey.Neuter().GetWif(Network);
 		public BitcoinExtKey BitcoinExtKey => ExtKey.GetWif(Network);
 
-		public BitcoinAddress GetAddress(int index, HdPathType hdPathType = HdPathType.Receive)
+		public BitcoinAddress GetAddress(int index, HdPathType hdPathType = HdPathType.Receive, SafeAccount account  = null)
 		{
-			return GetPrivateKey(index, hdPathType).ScriptPubKey.GetDestinationAddress(Network);
+			return GetPrivateKey(index, hdPathType, account).ScriptPubKey.GetDestinationAddress(Network);
 		}
 
-		public HashSet<BitcoinAddress> GetFirstNAddresses(int addressCount, HdPathType hdPathType = HdPathType.Receive)
+		public HashSet<BitcoinAddress> GetFirstNAddresses(int addressCount, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null)
 		{
 			var addresses = new HashSet<BitcoinAddress>();
 
 			for (var i = 0; i < addressCount; i++)
 			{
-				addresses.Add(GetAddress(i, hdPathType));
+				addresses.Add(GetAddress(i, hdPathType, account));
 			}
 
 			return addresses;
@@ -169,24 +169,30 @@ namespace HBitcoin.KeyManagement
 			return safe;
 		}
 
-		public BitcoinExtKey FindPrivateKey(BitcoinAddress address, int stopSearchAfterIteration = 100000)
+		public BitcoinExtKey FindPrivateKey(BitcoinAddress address, int stopSearchAfterIteration = 100000, SafeAccount account = null)
 		{
 			for (int i = 0; i < stopSearchAfterIteration; i++)
 			{
-				if (GetAddress(i, HdPathType.Receive) == address)
-					return GetPrivateKey(i, HdPathType.Receive);
-				if (GetAddress(i, HdPathType.Change) == address)
-					return GetPrivateKey(i, HdPathType.Change);
-				if (GetAddress(i, HdPathType.NonHardened) == address)
-					return GetPrivateKey(i, HdPathType.NonHardened);
+				if (GetAddress(i, HdPathType.Receive, account) == address)
+					return GetPrivateKey(i, HdPathType.Receive, account);
+				if (GetAddress(i, HdPathType.Change, account) == address)
+					return GetPrivateKey(i, HdPathType.Change, account);
+				if (GetAddress(i, HdPathType.NonHardened, account) == address)
+					return GetPrivateKey(i, HdPathType.NonHardened, account);
 			}
 
 			throw new KeyNotFoundException(address.ToWif());
 		}
 
-		public BitcoinExtKey GetPrivateKey(int index, HdPathType hdPathType = HdPathType.Receive)
+		public BitcoinExtKey GetPrivateKey(int index, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null)
 		{
-			string firstPart = Hierarchy.GetPathString(hdPathType);
+			string firstPart = "";
+			if(account != null)
+			{
+				firstPart += Hierarchy.GetPathString(account) + "/";
+			}
+
+			firstPart += Hierarchy.GetPathString(hdPathType);
 			string lastPart;
 			if(hdPathType == HdPathType.NonHardened)
 			{

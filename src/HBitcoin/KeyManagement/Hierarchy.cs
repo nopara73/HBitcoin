@@ -1,4 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Text.RegularExpressions;
+using NBitcoin;
 
 namespace HBitcoin.KeyManagement
 {
@@ -7,7 +11,8 @@ namespace HBitcoin.KeyManagement
 		Stealth,
 		Receive,
 		Change,
-		NonHardened
+		NonHardened,
+		Account // special
 	}
 
 	public static class Hierarchy
@@ -24,9 +29,38 @@ namespace HBitcoin.KeyManagement
 					return "2'";
 				case HdPathType.NonHardened:
 					return "3";
+				case HdPathType.Account:
+					return "4'";  // special
 				default:
 					throw new ArgumentOutOfRangeException(nameof(type), type, null);
 			}
+		}
+
+		public static string GetPathString(SafeAccount account) => account.PathString;
+	}
+
+	public class SafeAccount
+	{
+		public readonly uint Id;
+		public readonly string PathString;
+
+		public SafeAccount(uint id)
+		{
+			try
+			{
+				string firstPart = Hierarchy.GetPathString(HdPathType.Account);
+
+				string lastPart = $"/{id}'";
+				PathString = firstPart + lastPart;
+
+				KeyPath.Parse(PathString);
+			}
+			catch (Exception ex)
+			{
+				throw new ArgumentOutOfRangeException($"{nameof(id)} : {id}", ex);
+			}
+
+			Id = id;
 		}
 	}
 }
