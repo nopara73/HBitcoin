@@ -16,14 +16,14 @@ namespace HBitcoin.Tests
 				var network = i == 0 ? Network.Main : Network.TestNet;
 
 				Mnemonic mnemonic;
-				const string name = "TestWallet";
+				const string path = "Wallets/TestWallet.json";
 				const string password = "password";
 
-				var safe = Safe.Create(out mnemonic, password, name, network);
-				var loadedSafe = Safe.Load(password, name);
+				var safe = Safe.Create(out mnemonic, password, path, network);
+				var loadedSafe = Safe.Load(password, path);
 
 				var wantedCreation = DateTimeOffset.ParseExact("1998-01-01", "yyyy-MM-dd", CultureInfo.InvariantCulture);
-				var recoverdSafe = Safe.Recover(mnemonic, password, "RecoveredTestWallet", network, wantedCreation);
+				var recoverdSafe = Safe.Recover(mnemonic, password, "Wallets/RecoveredTestWallet.json", network, wantedCreation);
 
 				try
 				{
@@ -51,12 +51,12 @@ namespace HBitcoin.Tests
 		{
 			Network network = Network.TestNet;
 			Mnemonic mnemonic;
-			const string name = "TestWallet2";
+			const string path = "Wallets/TestWallet2.json";
 			const string password = "password";
 
-			var safe = Safe.Create(out mnemonic, password, name, network);
-			var loadedSafe = Safe.Load(password, name);
-			var recoverdSafe = Safe.Recover(mnemonic, password, "RecoveredTestWallet", network, Safe.EarliestPossibleCreationTime);
+			var safe = Safe.Create(out mnemonic, password, path, network);
+			var loadedSafe = Safe.Load(password, path);
+			var recoverdSafe = Safe.Recover(mnemonic, password, "Wallets/RecoveredTestWallet.json", network, Safe.EarliestPossibleCreationTime);
 
 			try
 			{
