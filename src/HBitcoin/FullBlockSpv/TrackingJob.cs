@@ -91,7 +91,21 @@ namespace HBitcoin.FullBlockSpv
 		public event EventHandler ConnectedNodeCountChanged;
 		private void OnConnectedNodeCountChanged() => ConnectedNodeCountChanged?.Invoke(this, EventArgs.Empty);
 
-	    private readonly SemaphoreSlim SemaphoreSave = new SemaphoreSlim(1, 1);
+		private TrackingState _state;
+		public TrackingState State
+		{
+			get { return _state; }
+			private set
+			{
+				if (_state == value) return;
+				OnStateChanged();
+				_state = value;
+			}
+		}
+		public event EventHandler StateChanged;
+		private void OnStateChanged() => StateChanged?.Invoke(this, EventArgs.Empty);
+
+		private readonly SemaphoreSlim SemaphoreSave = new SemaphoreSlim(1, 1);
 		private NodeConnectionParameters _connectionParameters;
 		private static NodesGroup _nodes;
 		private static LookaheadBlockPuller BlockPuller;
@@ -197,8 +211,8 @@ namespace HBitcoin.FullBlockSpv
 
 		    TrackDefaultSafe = trackDefaultSafe;
 
-		    
-		}
+		    State = TrackingState.NotStarted;
+	    }
 
 		#region SafeTracking
 
@@ -287,6 +301,17 @@ namespace HBitcoin.FullBlockSpv
 			BlockPuller = (LookaheadBlockPuller)bp;
 
 			MemPoolJob = new MemPoolJob(_nodes, TrackingChain);
+		    MemPoolJob.StateChanged += delegate
+		    {
+			    if(MemPoolJob.State == MemPoolState.WaitingForBlockchainSync)
+			    {
+				    State = TrackingState.SyncingBlocks;
+			    }
+			    if(MemPoolJob.State == MemPoolState.Syncing)
+			    {
+				    State = TrackingState.SyncingMempool;
+			    }
+		    };
 
 			_nodes.ConnectedNodes.Removed += delegate { OnConnectedNodeCountChanged(); };
 			_nodes.ConnectedNodes.Added += delegate { OnConnectedNodeCountChanged(); };
@@ -297,11 +322,13 @@ namespace HBitcoin.FullBlockSpv
 		    var tasks = new HashSet<Task>
 		    {
 			    PeriodicSaveAsync(TimeSpan.FromMinutes(3), cts.Token),
-				BlockPullerJobAsync(cts.Token)
+				BlockPullerJobAsync(cts.Token),
+				MemPoolJob.StartAsync(cts.Token)
 			};
 
 		    await Task.WhenAll(tasks).ConfigureAwait(false);
 
+		    State = TrackingState.NotStarted;
 			await SaveAllAsync().ConfigureAwait(false);
 			_nodes.Dispose();
 		}

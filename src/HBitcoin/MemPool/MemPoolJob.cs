@@ -15,14 +15,19 @@ namespace HBitcoin.MemPool
 		private readonly TrackingChain _chain;
 		private readonly NodesGroup _nodes;
 
-		public MemPoolState State { get; private set; }
-
-		public enum MemPoolState
+		private MemPoolState _state;
+		public MemPoolState State
 		{
-			NotStarted,
-			WaitingForBlockchainSync,
-			Syncing
+			get { return _state; }
+			private set
+			{
+				if(_state == value) return;
+				OnStateChanged();
+				_state = value;
+			}
 		}
+		public event EventHandler StateChanged;
+		private void OnStateChanged() => StateChanged?.Invoke(this, EventArgs.Empty);
 
 		public MemPoolJob(NodesGroup nodes, TrackingChain chain)
 		{
@@ -70,6 +75,7 @@ namespace HBitcoin.MemPool
 		}
 
 		private bool confirmationHappening = false;
+
 		private async Task ClearTransactionsWhenConfirmationJobAsync(CancellationToken ctsToken)
 		{
 			while (true)
