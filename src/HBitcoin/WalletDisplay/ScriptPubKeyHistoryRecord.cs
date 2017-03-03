@@ -8,8 +8,8 @@ using NBitcoin;
 
 namespace HBitcoin.WalletDisplay
 {
-    public class AddressBalanceRecord : INotifyPropertyChanged
-	{
+    public class ScriptPubKeyHistoryRecord
+    {
 		// http://stackoverflow.com/questions/35582162/how-to-implement-inotifypropertychanged-in-c-sharp-6-0
 		public event PropertyChangedEventHandler PropertyChanged;
 		protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
@@ -25,23 +25,29 @@ namespace HBitcoin.WalletDisplay
 			return true;
 		}
 
-		private Script _scriptPubKey;
-		public Script ScriptPubKey
+		private DateTimeOffset _timeStamp;
+		public DateTimeOffset TimeStamp
 		{
-			get { return _scriptPubKey; }
-			set { SetField(ref _scriptPubKey, value); }
+			get { return _timeStamp; }
+			set { SetField(ref _timeStamp, value); }
 		}
-		private Money _confirmed;
-		public Money Confirmed
+		private Money _amount;
+		public Money Amount
+		{
+			get { return _amount; }
+			set { SetField(ref _amount, value); }
+		}
+		private bool _confirmed;
+		public bool Confirmed
 		{
 			get { return _confirmed; }
 			set { SetField(ref _confirmed, value); }
 		}
-		private Money _unconfirmed;
-		public Money Unconfirmed
+		private uint256 _transactionId;
+		public uint256 TransactionId
 		{
-			get { return _unconfirmed; }
-			set { SetField(ref _unconfirmed, value); }
+			get { return _transactionId; }
+			set { SetField(ref _transactionId, value); }
 		}
 	}
 }

@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace HBitcoin.FullBlockSpv
 {
-	public enum TrackingState
+	public enum WalletState
 	{
 		NotStarted,
 		SyncingBlocks,

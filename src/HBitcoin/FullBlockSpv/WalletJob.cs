@@ -15,10 +15,10 @@ using Stratis.Bitcoin.BlockPulling;
 
 namespace HBitcoin.FullBlockSpv
 {
-    public class TrackingJob
+    public class WalletJob
     {
 		public Safe Safe { get; }
-	    public bool TrackDefaultSafe { get; }
+	    public bool TracksDefaultSafe { get; }
 		public HashSet<SafeAccount> Accounts { get; }
 
 	    private int _estimatedCreationHeight = -1;
@@ -93,8 +93,8 @@ namespace HBitcoin.FullBlockSpv
 		public event EventHandler ConnectedNodeCountChanged;
 		private void OnConnectedNodeCountChanged() => ConnectedNodeCountChanged?.Invoke(this, EventArgs.Empty);
 
-		private TrackingState _state;
-		public TrackingState State
+		private WalletState _state;
+		public WalletState State
 		{
 			get { return _state; }
 			private set
@@ -112,14 +112,9 @@ namespace HBitcoin.FullBlockSpv
 		private static NodesGroup _nodes;
 		private static LookaheadBlockPuller BlockPuller;
 	    private MemPoolJob MemPoolJob;
-
-		#region WalletDisplay
-
-		public ObservableCollection<AddressBalanceRecord> AddressBalances = new ObservableCollection<AddressBalanceRecord>();
-		public ObservableCollection<TransactionHistoryRecord> TransactionHistory = new ObservableCollection<TransactionHistoryRecord>();
-
-		#endregion
-
+		
+		public ObservableDictionary<Script, ObservableCollection<ScriptPubKeyHistoryRecord>> SafeHistory = new ObservableDictionary<Script, ObservableCollection<ScriptPubKeyHistoryRecord>>();
+		
 		private const string WorkFolderPath = "FullBlockSpv";
 		private string _addressManagerFilePath => Path.Combine(WorkFolderPath, $"AddressManager{Safe.Network}.dat");
 		private string _headerChainFilePath => Path.Combine(WorkFolderPath, $"HeaderChain{Safe.Network}.dat");
@@ -209,7 +204,7 @@ namespace HBitcoin.FullBlockSpv
 		}
 		#endregion
 
-		public TrackingJob(Safe safeToTrack, bool trackDefaultSafe = true, params SafeAccount[] accountsToTrack)
+		public WalletJob(Safe safeToTrack, bool trackDefaultSafe = true, params SafeAccount[] accountsToTrack)
 	    {
 		    Safe = safeToTrack;
 		    if(accountsToTrack == null || !accountsToTrack.Any())
@@ -218,9 +213,9 @@ namespace HBitcoin.FullBlockSpv
 			}
 			else Accounts = new HashSet<SafeAccount>(accountsToTrack);
 
-		    TrackDefaultSafe = trackDefaultSafe;
+		    TracksDefaultSafe = trackDefaultSafe;
 
-		    State = TrackingState.NotStarted;
+		    State = WalletState.NotStarted;
 	    }
 
 		#region SafeTracking
@@ -235,7 +230,7 @@ namespace HBitcoin.FullBlockSpv
 
 		private void UpdateSafeTrackingByHdPathType(HdPathType hdPathType)
 		{
-			if (TrackDefaultSafe) UpdateSafeTrackingByPath(hdPathType);
+			if (TracksDefaultSafe) UpdateSafeTrackingByPath(hdPathType);
 
 			foreach (var acc in Accounts)
 			{
@@ -252,10 +247,9 @@ namespace HBitcoin.FullBlockSpv
 				Script scriptPubkey = acccount == null ? Safe.GetAddress(i, hdPathType).ScriptPubKey : Safe.GetAddress(i, hdPathType, acccount).ScriptPubKey;
 
 				TrackingChain.Track(scriptPubkey);
-				Dictionary<Transaction, int> transactions;
 
 				// if didn't find in the chain, it's clean
-				bool clean = !TrackingChain.TryFindTransactions(scriptPubkey, out transactions);
+				bool clean = TrackingChain.IsClean(scriptPubkey);
 
 				// if still clean look in mempool
 				if(clean)
@@ -296,12 +290,10 @@ namespace HBitcoin.FullBlockSpv
 			TrackingChain.TrackedTransactions.CollectionChanged += delegate
 			{
 				UpdateSafeTracking();
-				//UpdateTransactionHistory();
-				//UpdateAddressBalances();
+				UpdateSafeHistory();
 			};
 			UpdateSafeTracking();
-			//UpdateTransactionHistory();
-			//UpdateAddressBalances();
+			UpdateSafeHistory();
 
 			_connectionParameters = new NodeConnectionParameters();
 			//So we find nodes faster
@@ -325,19 +317,18 @@ namespace HBitcoin.FullBlockSpv
 		    {
 			    if(MemPoolJob.State == MemPoolState.WaitingForBlockchainSync)
 			    {
-				    State = TrackingState.SyncingBlocks;
+				    State = WalletState.SyncingBlocks;
 			    }
 			    if(MemPoolJob.State == MemPoolState.Syncing)
 			    {
-				    State = TrackingState.SyncingMempool;
+				    State = WalletState.SyncingMempool;
 			    }
 		    };
 		    MemPoolJob.TrackedTransactions.CollectionChanged += delegate
 		    {
 				UpdateSafeTracking();
-				//UpdateTransactionHistory();
-				//UpdateAddressBalances();
-			};
+			    UpdateSafeHistory();
+		    };
 
 			_nodes.ConnectedNodes.Removed += delegate { OnConnectedNodeCountChanged(); };
 			_nodes.ConnectedNodes.Added += delegate { OnConnectedNodeCountChanged(); };
@@ -354,9 +345,170 @@ namespace HBitcoin.FullBlockSpv
 
 		    await Task.WhenAll(tasks).ConfigureAwait(false);
 
-		    State = TrackingState.NotStarted;
+		    State = WalletState.NotStarted;
 			await SaveAllAsync().ConfigureAwait(false);
 			_nodes.Dispose();
+		}
+
+	    private void UpdateSafeHistory()
+	    {
+		    var scriptPubKeys = TrackingChain.TrackedScriptPubKeys;
+		    foreach(var scriptPubKey in scriptPubKeys)
+		    {
+				ObservableCollection<ScriptPubKeyHistoryRecord> records = new ObservableCollection<ScriptPubKeyHistoryRecord>();
+
+				Dictionary<Transaction, int> receivedTransactions;
+				Dictionary<Transaction, int> spentTransactions;
+
+			    if(TryFindAllChainAndMemPoolTransactions(scriptPubKey, out receivedTransactions, out spentTransactions))
+			    {
+				    foreach(var tx in receivedTransactions)
+					{
+						var record = new ScriptPubKeyHistoryRecord();
+						record.Amount = Money.Zero; //for now
+
+					    record.TransactionId = tx.Key.GetHash();
+					    record.Confirmed = tx.Value != -1;
+					    if(!record.Confirmed)
+					    {
+							var contains = false;
+							// if already contains, don't modify timestamp
+							if (SafeHistory.ContainsKey(scriptPubKey))
+							{
+								var rcrds = SafeHistory[scriptPubKey];
+								foreach(var rcd in rcrds)
+								{
+									if(rcd.TransactionId == tx.Key.GetHash())
+									{
+										contains = true;
+									}
+								}
+							}
+
+							if (contains == false) record.TimeStamp = DateTimeOffset.UtcNow;
+					    }
+					    else
+					    {
+							record.TimeStamp = HeaderChain.GetBlock(tx.Value).Header.BlockTime;
+					    }
+
+						var coins = tx.Key.Outputs.AsCoins();
+						foreach(var coin in coins)
+						{
+							if(coin.ScriptPubKey == scriptPubKey)
+							{
+								record.Amount += coin.Amount;
+							}
+						}
+
+						if(spentTransactions.Count != 0)
+						{
+							foreach(var input in tx.Key.Inputs)
+							{
+								var spent = spentTransactions.FirstOrDefault(x => x.Key.GetHash() == input.PrevOut.Hash).Key;
+								if(!spent.Equals(default(Transaction)))
+								{
+									var spentCoins = spent.Outputs.AsCoins();
+									foreach(var spentCoin in spentCoins)
+									{
+										if (spentCoin.ScriptPubKey == scriptPubKey)
+										{
+											record.Amount -= spentCoin.Amount;
+										}
+									}
+								}
+							}
+						}
+				    }
+			    }
+
+				SafeHistory.Add(scriptPubKey, records);
+			}
+		}
+
+	    /// <summary>
+	    /// 
+	    /// </summary>
+	    /// <param name="scriptPubKey"></param>
+	    /// <param name="receivedTransactions">int: block height</param>
+	    /// <param name="spentTransactions">int: block height</param>
+	    /// <returns></returns>
+	    public bool TryFindAllChainAndMemPoolTransactions(Script scriptPubKey, out Dictionary<Transaction, int> receivedTransactions, out Dictionary<Transaction, int> spentTransactions)
+	    {
+			var found = false;
+			receivedTransactions = new Dictionary<Transaction, int>();
+			spentTransactions = new Dictionary<Transaction, int>();
+			
+			foreach (var tx in GetAllChainAndMemPoolTransactions())
+			{
+				// if already has that tx continue
+				if (receivedTransactions.Keys.Any(x => x.GetHash() == tx.Key.GetHash()))
+					continue;
+
+				foreach (var output in tx.Key.Outputs)
+				{
+					if (output.ScriptPubKey.Equals(scriptPubKey))
+					{
+						receivedTransactions.Add(tx.Key, tx.Value);
+						found = true;
+					}
+				}
+			}
+
+		    if(found)
+		    {
+			    foreach(var tx in GetAllChainAndMemPoolTransactions())
+			    {
+				    // if already has that tx continue
+				    if(spentTransactions.Keys.Any(x => x.GetHash() == tx.Key.GetHash()))
+					    continue;
+
+				    foreach(var input in tx.Key.Inputs)
+				    {
+					    if(receivedTransactions.Keys.Select(x => x.GetHash()).Contains(input.PrevOut.Hash))
+					    {
+						    spentTransactions.Add(tx.Key, tx.Value);
+						    found = true;
+					    }
+				    }
+
+			    }
+		    }
+
+		    return found;
+		}
+
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <returns>int: block height, -1 if mempool</returns>
+		public Dictionary<Transaction, int> GetAllChainAndMemPoolTransactions()
+		{
+			var transactions = new Dictionary<Transaction, int>();
+
+			foreach (var tx in TrackingChain.TrackedTransactions)
+			{
+				Transaction foundTransaction;
+				if (tx.Value != -1)
+				{
+					if (TrackingChain.TryFindTransaction(tx.Key, tx.Value, out foundTransaction))
+					{
+						transactions.Add(foundTransaction, tx.Value);
+					}
+				}
+				else
+				{
+					if (MemPoolJob != null)
+					{
+						if (MemPoolJob.TryFindTransaction(tx.Key, out foundTransaction))
+						{
+							transactions.Add(foundTransaction, -1);
+						}
+					}
+				}
+			}
+
+			return transactions;
 		}
 
 		#region BlockPulling

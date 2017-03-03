@@ -31,6 +31,27 @@ namespace HBitcoin.MemPool
 		private void OnStateChanged() => StateChanged?.Invoke(this, EventArgs.Empty);
 
 		public ObservableCollection<Transaction> TrackedTransactions = new ObservableCollection<Transaction>();
+		public bool TryFindTransaction(uint256 transactionId, out Transaction transaction)
+		{
+			transaction = null;
+
+			try
+			{
+				foreach (var tx in TrackedTransactions)
+				{
+					if (tx.GetHash() == transactionId)
+					{
+						transaction = tx;
+						return true;
+					}
+				}
+			}
+			catch
+			{
+				return false;
+			}
+			return false;
+		}
 
 		public MemPoolJob(NodesGroup nodes, TrackingChain chain)
 		{

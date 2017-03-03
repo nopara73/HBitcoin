@@ -18,25 +18,55 @@ namespace HBitcoin.FullBlockSpv
 		public ObservableDictionary<int, TrackingBlock> Chain { get; } = new ObservableDictionary<int, TrackingBlock>();
 		private ConcurrentChain _headerChain;
 
-	    public bool TryFindTransactions(Script scriptPubKey, out Dictionary<Transaction, int> transactions)
+	    /// <summary>
+	    /// 
+	    /// </summary>
+	    /// <param name="scriptPubKey"></param>
+	    /// <param name="receivedTransactions">int: block height</param>
+	    /// <param name="spentTransactions">int: block height</param>
+	    /// <returns></returns>
+	    public bool TryFindConfirmedTransactions(Script scriptPubKey, out Dictionary<Transaction, int> receivedTransactions, out Dictionary<Transaction, int> spentTransactions)
 	    {
 		    var found = false;
-		    transactions = new Dictionary<Transaction, int>();
+		    receivedTransactions = new Dictionary<Transaction, int>();
+			spentTransactions = new Dictionary<Transaction, int>();
 
-		    foreach(TrackingBlock block in Chain.Values)
+			foreach (TrackingBlock block in Chain.Values)
 		    {
 			    foreach(var tx in block.TrackedTransactions)
 			    {
 					// if already has that tx continue
-					if(transactions.Keys.Any(x => x.GetHash() == tx.GetHash()))
+					if(receivedTransactions.Keys.Any(x => x.GetHash() == tx.GetHash()))
 						continue;
 
 					foreach(var output in tx.Outputs)
 				    {
 					    if(output.ScriptPubKey.Equals(scriptPubKey))
 					    {
-						    transactions.Add(tx, block.Height);
+							receivedTransactions.Add(tx, block.Height);
 						    found = true;
+					    }
+				    }
+			    }
+		    }
+
+		    if(found)
+		    {
+			    foreach(TrackingBlock block in Chain.Values)
+			    {
+				    foreach(var tx in block.TrackedTransactions)
+				    {
+					    // if already has that tx continue
+					    if(spentTransactions.Keys.Any(x => x.GetHash() == tx.GetHash()))
+						    continue;
+
+					    foreach(var input in tx.Inputs)
+					    {
+						    if(receivedTransactions.Keys.Select(x => x.GetHash()).Contains(input.PrevOut.Hash))
+						    {
+							    spentTransactions.Add(tx, block.Height);
+							    found = true;
+						    }
 					    }
 				    }
 			    }
@@ -45,7 +75,75 @@ namespace HBitcoin.FullBlockSpv
 		    return found;
 	    }
 
-		/// <summary> int: block height, if tx is not found yet -1 </summary>
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="scriptPubKey"></param>
+		/// <returns>if haven't got any fund yet</returns>
+		public bool IsClean(Script scriptPubKey)
+		{
+			foreach (TrackingBlock block in Chain.Values)
+			{
+				foreach (var tx in block.TrackedTransactions)
+				{
+					if(tx.Outputs.Any(output => output.ScriptPubKey.Equals(scriptPubKey)))
+					{
+						return false;
+					}
+				}
+			}
+
+			return true;
+		}
+
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="transactionId"></param>
+		/// <param name="transaction">int: block height</param>
+		/// <returns></returns>
+		public bool TryFindTransaction(uint256 transactionId, out Tuple<Transaction, int> transaction)
+		{
+			transaction = null;
+
+			foreach (TrackingBlock block in Chain.Values)
+			{
+				Transaction awaitedTransaction;
+				if(TryFindTransaction(transactionId, block.Height, out awaitedTransaction))
+				{
+					transaction = new Tuple<Transaction, int>(awaitedTransaction, block.Height);
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+	    public bool TryFindTransaction(uint256 transactionId, int blockHeight, out Transaction transaction)
+	    {
+			transaction = null;
+			if (blockHeight == -1) return false;
+
+		    try
+		    {
+			    var block = Chain[blockHeight];
+			    foreach(var tx in block.TrackedTransactions)
+			    {
+				    if(tx.GetHash() == transactionId)
+				    {
+					    transaction = tx;
+					    return true;
+				    }
+			    }
+		    }
+		    catch
+		    {
+				return false;
+		    }
+			return false;
+	    }
+
+	    /// <summary> int: block height, if tx is not found yet -1 </summary>
 		public ObservableDictionary<uint256, int> TrackedTransactions { get; }
 			= new ObservableDictionary<uint256, int>();
 		public HashSet<Script> TrackedScriptPubKeys { get; }
@@ -94,49 +192,42 @@ namespace HBitcoin.FullBlockSpv
 		#region Tracking
 
 		/// <summary> Track a transaction </summary>
-		/// <returns>False if not found. When confirms, it starts tracking. If too old you need to resync the chain.</returns>
+		/// <returns>False if not confirmed. True if confirmed. If too old you need to resync the chain.</returns>
 		public bool Track(uint256 transactionId)
 		{
+			// if already tracks it
 			if (TrackedTransactions.Keys.Contains(transactionId))
 			{
+				// find it 
 				var tracked = TrackedTransactions.First(x => x.Key.Equals(transactionId));
+				// return false if not confirmed yet
 				if (tracked.Value == -1) return false;
+				// return true if confirmed
 				else return true;
 			}
 
+			// if didn't track it yet add to tracked transactions
 			TrackedTransactions.AddOrReplace(transactionId, -1);
 
-			Transaction transaction = null;
-			Block block = null;
+			// search through the buffer, just in case
 			foreach (var b in FullBlockBuffer.Values)
 			{
 				Transaction tx = b.Transactions.FirstOrDefault(x => transactionId.Equals(x.GetHash()));
 				if (tx != default(Transaction))
 				{
-					transaction = tx;
-					block = b;
-					break;
+					// if found it set tx and blocks
+					TrackingBlock trackingBlock =
+					Chain.First(x => b.Header.GetHash().Equals(x.Value.MerkleProof.Header.GetHash())).Value;
+
+					trackingBlock.TrackedTransactions.Add(tx);
+					var transactionHashes = trackingBlock.MerkleProof.PartialMerkleTree.GetMatchedTransactions() as HashSet<uint256>;
+					transactionHashes.Add(tx.GetHash());
+					trackingBlock.MerkleProof = b.Filter(transactionHashes.ToArray());
+
+					return true; // since it is confirmed
 				}
 			}
-
-			// This warning doesn't make sense:
-			// ReSharper disable once ConditionIsAlwaysTrueOrFalse
-			if (block == null || transaction == null)
-			{
-				return false;
-			}
-			else
-			{
-				TrackingBlock trackingBlock =
-					Chain.First(x => block.Header.GetHash().Equals(x.Value.MerkleProof.Header.GetHash())).Value;
-
-				trackingBlock.TrackedTransactions.Add(transaction);
-				var transactionHashes = trackingBlock.MerkleProof.PartialMerkleTree.GetMatchedTransactions() as HashSet<uint256>;
-				transactionHashes.Add(transaction.GetHash());
-				trackingBlock.MerkleProof = block.Filter(transactionHashes.ToArray());
-
-				return true;
-			}
+			return false; // since it didn't found, didn't confirmed
 		}
 		/// <param name="scriptPubKey">BitcoinAddress.ScriptPubKey</param>
 		/// <param name="searchFullBlockBuffer">If true: it looks for transactions in the buffered full blocks in memory</param>
@@ -159,7 +250,7 @@ namespace HBitcoin.FullBlockSpv
 		/// <param name="scriptPubKey"></param>
 		/// <param name="height"></param>
 		/// <param name="block"></param>
-		/// <returns>true if found</returns>
+		/// <returns>true if found an already confirmed transaction in a block)</returns>
 		private bool TrackIfFindRelatedTransactions(Script scriptPubKey, int height, Block block)
 		{
 			var found = false;
@@ -224,24 +315,49 @@ namespace HBitcoin.FullBlockSpv
 
 		public void Add(int height, Block block)
 		{
+			// 1. Look for transactions, related to our scriptpubkeys
 			foreach (var spk in TrackedScriptPubKeys)
 			{
 				TrackIfFindRelatedTransactions(spk, height, block);
 			}
 
+			// 2. Look for transactions, we are waiting to confirm
 			FullBlockBuffer.AddOrReplace(height, block);
-			HashSet<uint256> notFoundTransactions = GetNotYetFoundTrackedTransactions();
-			HashSet<uint256> foundTransactions = new HashSet<uint256>();
-			foreach (var txid in notFoundTransactions)
+			HashSet<uint256> notYetFoundTrackedTransactions = GetNotYetFoundTrackedTransactions();
+			HashSet<uint256> justFoundTransactions = new HashSet<uint256>();
+			foreach (var txid in notYetFoundTrackedTransactions)
 			{
 				if (block.Transactions.Any(x => x.GetHash().Equals(txid)))
 				{
-					foundTransactions.Add(txid);
+					justFoundTransactions.Add(txid);
 				}
 			}
-			MerkleBlock merkleProof = foundTransactions.Count == 0 ? block.Filter() : block.Filter(foundTransactions.ToArray());
+
+			// 3. Look for transactions, those are spending any of our transactions
+			foreach(var txid in TrackedTransactions.Keys)
+			{
+				foreach(var tx in block.Transactions)
+				{
+					foreach(var input in tx.Inputs)
+					{
+						try
+						{
+							if(input.PrevOut.Hash == txid)
+							{
+								justFoundTransactions.Add(txid);
+							}
+						}
+						catch
+						{
+							// this tx is strange, maybe this never happens, whatever
+						}
+					}
+				}
+			}
+
+			MerkleBlock merkleProof = justFoundTransactions.Count == 0 ? block.Filter() : block.Filter(justFoundTransactions.ToArray());
 			var trackingBlock = new TrackingBlock(height, merkleProof);
-			foreach (var txid in foundTransactions)
+			foreach (var txid in justFoundTransactions)
 			{
 				foreach (var tx in block.Transactions)
 				{
