@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,6 +29,8 @@ namespace HBitcoin.MemPool
 		}
 		public event EventHandler StateChanged;
 		private void OnStateChanged() => StateChanged?.Invoke(this, EventArgs.Empty);
+
+		public ObservableCollection<Transaction> TrackedTransactions = new ObservableCollection<Transaction>();
 
 		public MemPoolJob(NodesGroup nodes, TrackingChain chain)
 		{
@@ -80,10 +83,7 @@ namespace HBitcoin.MemPool
 		{
 			while (true)
 			{
-				if (ctsToken.IsCancellationRequested)
-				{
-					return;
-				}
+				if (ctsToken.IsCancellationRequested) return;
 
 				if (!_chain.Synced)
 				{
@@ -91,6 +91,25 @@ namespace HBitcoin.MemPool
 					{
 						confirmationHappening = true;
 						Transactions.Clear();
+
+						while(confirmationHappening)
+						{
+							await Task.Delay(10, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
+						}
+						if (ctsToken.IsCancellationRequested) return;
+
+						// a block just confirmed, take out the ones we are concerned
+						if(_chain.FullBlockBuffer.Count != 0)
+						{
+							foreach(Transaction tx in _chain.FullBlockBuffer[_chain.FullBlockBuffer.Keys.Max()].Transactions)
+							{
+								foreach(var ttx in TrackedTransactions)
+								{
+									if(tx.GetHash().Equals(ttx.GetHash()))
+										TrackedTransactions.Remove(ttx);
+								}
+							}
+						}
 					}
 				}
 
@@ -117,6 +136,36 @@ namespace HBitcoin.MemPool
 						if (ctsToken.IsCancellationRequested) return;
 
 						Transactions.AddOrReplace(tx.GetHash(), tx);
+
+						// todo handle malleated transactions
+						// todo handle transactions those are dropping out of the mempool
+						// if we track it, then add
+						// only if -1 it's not confirmed or present
+						var awaitedTxids = _chain.TrackedTransactions.Where(x => x.Value == -1).Select(x => x.Key);
+						// if we are interested in the tx
+						if(awaitedTxids.Contains(tx.GetHash()))
+						{
+							var alreadyTrackedTxids = TrackedTransactions.Select(x => x.GetHash());
+							// if not already tracking the track
+							if(!alreadyTrackedTxids.Contains(tx.GetHash()))
+							{
+								TrackedTransactions.Add(tx);
+							}
+						}
+
+						foreach(var spk in tx.Outputs.Select(x => x.ScriptPubKey))
+						{
+							// if we are tracking that scriptpubkey
+							if(_chain.TrackedScriptPubKeys.Contains(spk))
+							{
+								var alreadyTrackedTxids = TrackedTransactions.Select(x => x.GetHash());
+								// if not already tracking the transaction the track
+								if (!alreadyTrackedTxids.Contains(tx.GetHash()))
+								{
+									TrackedTransactions.Add(tx);
+								}
+							}
+						}
 					}
 				}
 			}

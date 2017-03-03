@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HBitcoin.KeyManagement;
 using HBitcoin.MemPool;
+using HBitcoin.WalletDisplay;
 using NBitcoin;
 using NBitcoin.Protocol;
 using NBitcoin.Protocol.Behaviors;
@@ -110,6 +112,13 @@ namespace HBitcoin.FullBlockSpv
 		private static NodesGroup _nodes;
 		private static LookaheadBlockPuller BlockPuller;
 	    private MemPoolJob MemPoolJob;
+
+		#region WalletDisplay
+
+		public ObservableCollection<AddressBalanceRecord> AddressBalances = new ObservableCollection<AddressBalanceRecord>();
+		public ObservableCollection<TransactionHistoryRecord> TransactionHistory = new ObservableCollection<TransactionHistoryRecord>();
+
+		#endregion
 
 		private const string WorkFolderPath = "FullBlockSpv";
 		private string _addressManagerFilePath => Path.Combine(WorkFolderPath, $"AddressManager{Safe.Network}.dat");
@@ -248,16 +257,20 @@ namespace HBitcoin.FullBlockSpv
 				// if didn't find in the chain, it's clean
 				bool clean = !TrackingChain.TryFindTransactions(scriptPubkey, out transactions);
 
-				// if found in mempool it's not clean
-				if(MemPoolJob != null)
+				// if still clean look in mempool
+				if(clean)
 				{
-					foreach(var tx in MemPoolJob.Transactions.Values)
+					// if found in mempool it's not clean
+					if(MemPoolJob != null)
 					{
-						foreach(var output in tx.Outputs)
+						foreach(var tx in MemPoolJob.TrackedTransactions)
 						{
-							if(output.ScriptPubKey.Equals(scriptPubkey))
+							foreach(var output in tx.Outputs)
 							{
-								clean = false;
+								if(output.ScriptPubKey.Equals(scriptPubkey))
+								{
+									clean = false;
+								}
 							}
 						}
 					}
@@ -280,8 +293,15 @@ namespace HBitcoin.FullBlockSpv
 	    {
 			Directory.CreateDirectory(WorkFolderPath);
 
-			TrackingChain.TrackedTransactions.CollectionChanged += delegate { UpdateSafeTracking(); };
+			TrackingChain.TrackedTransactions.CollectionChanged += delegate
+			{
+				UpdateSafeTracking();
+				//UpdateTransactionHistory();
+				//UpdateAddressBalances();
+			};
 			UpdateSafeTracking();
+			//UpdateTransactionHistory();
+			//UpdateAddressBalances();
 
 			_connectionParameters = new NodeConnectionParameters();
 			//So we find nodes faster
@@ -312,6 +332,12 @@ namespace HBitcoin.FullBlockSpv
 				    State = TrackingState.SyncingMempool;
 			    }
 		    };
+		    MemPoolJob.TrackedTransactions.CollectionChanged += delegate
+		    {
+				UpdateSafeTracking();
+				//UpdateTransactionHistory();
+				//UpdateAddressBalances();
+			};
 
 			_nodes.ConnectedNodes.Removed += delegate { OnConnectedNodeCountChanged(); };
 			_nodes.ConnectedNodes.Added += delegate { OnConnectedNodeCountChanged(); };

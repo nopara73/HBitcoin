@@ -15,36 +15,32 @@ namespace System.Collections.ObjectModel
 		private const string KeysName = "Keys";
 		private const string ValuesName = "Values";
 
-		private IDictionary<TKey, TValue> _Dictionary;
-		protected IDictionary<TKey, TValue> Dictionary
-		{
-			get { return _Dictionary; }
-		}
+		protected IDictionary<TKey, TValue> Dictionary { get; private set; }
 
 		#region Constructors
 		public ObservableDictionary()
 		{
-			_Dictionary = new Dictionary<TKey, TValue>();
+			Dictionary = new Dictionary<TKey, TValue>();
 		}
 		public ObservableDictionary(IDictionary<TKey, TValue> dictionary)
 		{
-			_Dictionary = new Dictionary<TKey, TValue>(dictionary);
+			Dictionary = new Dictionary<TKey, TValue>(dictionary);
 		}
 		public ObservableDictionary(IEqualityComparer<TKey> comparer)
 		{
-			_Dictionary = new Dictionary<TKey, TValue>(comparer);
+			Dictionary = new Dictionary<TKey, TValue>(comparer);
 		}
 		public ObservableDictionary(int capacity)
 		{
-			_Dictionary = new Dictionary<TKey, TValue>(capacity);
+			Dictionary = new Dictionary<TKey, TValue>(capacity);
 		}
 		public ObservableDictionary(IDictionary<TKey, TValue> dictionary, IEqualityComparer<TKey> comparer)
 		{
-			_Dictionary = new Dictionary<TKey, TValue>(dictionary, comparer);
+			Dictionary = new Dictionary<TKey, TValue>(dictionary, comparer);
 		}
 		public ObservableDictionary(int capacity, IEqualityComparer<TKey> comparer)
 		{
-			_Dictionary = new Dictionary<TKey, TValue>(capacity, comparer);
+			Dictionary = new Dictionary<TKey, TValue>(capacity, comparer);
 		}
 		#endregion
 
@@ -65,18 +61,25 @@ namespace System.Collections.ObjectModel
 			get { return Dictionary.Keys; }
 		}
 
-		public bool Remove(TKey key)
+		public bool Remove(TKey key, bool suppressNotifications = false)
 		{
 			if (key == null) throw new ArgumentNullException(nameof(key));
 
 			TValue value;
 			Dictionary.TryGetValue(key, out value);
 			var removed = Dictionary.Remove(key);
-			if (removed)
-				//OnCollectionChanged(NotifyCollectionChangedAction.Remove, new KeyValuePair<TKey, TValue>(key, value));
-				OnCollectionChanged();
+			if(removed)
+			{
+				if(suppressNotifications == false)
+				{
+					//OnCollectionChanged(NotifyCollectionChangedAction.Remove, new KeyValuePair<TKey, TValue>(key, value));
+					OnCollectionChanged();
+				}
+			}
 			return removed;
 		}
+
+		public bool Remove(TKey key) => Remove(key, suppressNotifications: false);
 
 		public bool TryGetValue(TKey key, out TValue value)
 		{
@@ -177,6 +180,19 @@ namespace System.Collections.ObjectModel
 
 		#endregion
 
+		public void AddOrReplace(TKey key, TValue value)
+		{
+			if (ContainsKey(key))
+			{
+				Remove(key, suppressNotifications: true);
+				Add(key, value);
+			}
+			else
+			{
+				Add(key, value);
+			}
+		}
+
 		public void AddRange(IDictionary<TKey, TValue> items)
 		{
 			if (items == null) throw new ArgumentNullException(nameof(items));
@@ -191,7 +207,7 @@ namespace System.Collections.ObjectModel
 						foreach (var item in items) Dictionary.Add(item);
 				}
 				else
-					_Dictionary = new Dictionary<TKey, TValue>(items);
+					Dictionary = new Dictionary<TKey, TValue>(items);
 
 				OnCollectionChanged(NotifyCollectionChangedAction.Add, items.ToArray());
 			}
