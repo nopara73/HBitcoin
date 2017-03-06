@@ -15,30 +15,30 @@ using Stratis.Bitcoin.BlockPulling;
 
 namespace HBitcoin.FullBlockSpv
 {
-    public class WalletJob
+    public static class WalletJob
     {
-		public Safe Safe { get; }
-	    public bool TracksDefaultSafe { get; }
-		public HashSet<SafeAccount> Accounts { get; }
+		public static Safe Safe { get; private set; }
+	    public static bool TracksDefaultSafe { get; private set; }
+		public static HashSet<SafeAccount> Accounts { get; private set; }
 
-	    private int _estimatedCreationHeight = -1;
+	    private static int _CreationHeight = -1;
 		/// <summary>
 		/// -1 if unknown (eg. the header chain is not there yet)
 		/// </summary>
-		public int EstimatedCreationHeight
+		public static int CreationHeight
 	    {
 		    get
 		    {
 				// it's enough to estimate once
-			    if(_estimatedCreationHeight != -1) return _estimatedCreationHeight;
-			    else return _estimatedCreationHeight = EstimateSafeCreationHeight();
+			    if(_CreationHeight != -1) return _CreationHeight;
+			    else return _CreationHeight = FindSafeCreationHeight();
 		    }
 	    }
 
 		/// <summary>
 		/// -1 if unknown (eg. the header chain is not there yet)
 		/// </summary>
-		private int EstimateSafeCreationHeight()
+		private static int FindSafeCreationHeight()
 		{
 			try
 			{
@@ -68,69 +68,68 @@ namespace HBitcoin.FullBlockSpv
 			}
 	    }
 
-	    public int BestHeight => TrackingChain.BestHeight;
-		/// <summary>
-		/// 
-		/// </summary>
-		/// <returns>-1 if no connected nodes</returns>
-	    public async Task<int> GetBestConnectedNodeHeightAsync()
+	    public static int BestHeight => TrackingChain.BestHeight;
+
+	    public static int ConnectedNodeCount
 	    {
-		    const int noHeight = -1;
-		    if(ConnectedNodeCount == 0) return noHeight;
-
-		    var tasks = new HashSet<Task<int>>();
-		    foreach(var node in _nodes.ConnectedNodes)
+		    get
 		    {
-			    tasks.Add(Task.Run(() => node.GetChain().Height));
+			    if(Nodes == null) return 0;
+			    return Nodes.ConnectedNodes.Count;
 		    }
-
-		    await Task.WhenAll(tasks).ConfigureAwait(false);
-
-		    return tasks.Select(t => t.Result).Concat(new[] { noHeight }).Max();
 	    }
 
-	    public int ConnectedNodeCount => _nodes.ConnectedNodes.Count;
-		public event EventHandler ConnectedNodeCountChanged;
-		private void OnConnectedNodeCountChanged() => ConnectedNodeCountChanged?.Invoke(this, EventArgs.Empty);
+	    public static int MaxConnectedNodeCount
+	    {
+		    get
+		    {
+			    if(Nodes == null) return 0;
+			    return Nodes.MaximumNodeConnection;
+		    }
+	    }
 
-		private WalletState _state;
-		public WalletState State
+	    public static event EventHandler ConnectedNodeCountChanged;
+		private static void OnConnectedNodeCountChanged() => ConnectedNodeCountChanged?.Invoke(null, EventArgs.Empty);
+
+		private static WalletState _state;
+		public static WalletState State
 		{
 			get { return _state; }
 			private set
 			{
 				if (_state == value) return;
-				OnStateChanged();
 				_state = value;
+				OnStateChanged();
 			}
 		}
-		public event EventHandler StateChanged;
-		private void OnStateChanged() => StateChanged?.Invoke(this, EventArgs.Empty);
+		public static event EventHandler StateChanged;
+		private static void OnStateChanged() => StateChanged?.Invoke(null, EventArgs.Empty);
 
-		private readonly SemaphoreSlim SemaphoreSave = new SemaphoreSlim(1, 1);
-		private NodeConnectionParameters _connectionParameters;
-		private static NodesGroup _nodes;
-		private static LookaheadBlockPuller BlockPuller;
-	    private MemPoolJob MemPoolJob;
+	    public static bool ChainsInSync => TrackingChain.BestHeight == HeaderChain.Height;
+
+		private static readonly SemaphoreSlim SemaphoreSave = new SemaphoreSlim(1, 1);
+		private static NodeConnectionParameters _connectionParameters;
+	    public static NodesGroup Nodes { get; private set; }
+	    private static LookaheadBlockPuller BlockPuller;
 		
-		public ObservableDictionary<Script, ObservableCollection<ScriptPubKeyHistoryRecord>> SafeHistory = new ObservableDictionary<Script, ObservableCollection<ScriptPubKeyHistoryRecord>>();
+		public static ObservableDictionary<Script, ObservableCollection<ScriptPubKeyHistoryRecord>> SafeHistory = new ObservableDictionary<Script, ObservableCollection<ScriptPubKeyHistoryRecord>>();
 		
-		private const string WorkFolderPath = "FullBlockSpv";
-		private string _addressManagerFilePath => Path.Combine(WorkFolderPath, $"AddressManager{Safe.Network}.dat");
-		private string _headerChainFilePath => Path.Combine(WorkFolderPath, $"HeaderChain{Safe.Network}.dat");
-		private string _trackingChainFolderPath => Path.Combine(WorkFolderPath, $"TrackingChain{Safe.Network}");
+		private const string WorkFolderPath = "FullBlockSpvData";
+		private static string _addressManagerFilePath => Path.Combine(WorkFolderPath, $"AddressManager{Safe.Network}.dat");
+		private static string _headerChainFilePath => Path.Combine(WorkFolderPath, $"HeaderChain{Safe.Network}.dat");
+		private static string _trackingChainFolderPath => Path.Combine(WorkFolderPath, $"TrackingChain{Safe.Network}");
 
 		#region SmartProperties
-		private TrackingChain _trackingChain = null;
-		public TrackingChain TrackingChain => GetTrackingChainAsync().Result;
+		private static TrackingChain _trackingChain = null;
+		public static TrackingChain TrackingChain => GetTrackingChainAsync().Result;
 		// This async getter is for clean exception handling
-		private async Task<TrackingChain> GetTrackingChainAsync()
+		private static async Task<TrackingChain> GetTrackingChainAsync()
 		{
 			// if already in memory return it
 			if (_trackingChain != null) return _trackingChain;
 
 			// else load it
-			_trackingChain = new TrackingChain(Safe.Network, HeaderChain);
+			_trackingChain = new TrackingChain(Safe.Network);
 			try
 			{
 				await _trackingChain.LoadAsync(_trackingChainFolderPath).ConfigureAwait(false);
@@ -138,13 +137,13 @@ namespace HBitcoin.FullBlockSpv
 			catch
 			{
 				// Sync blockchain:
-				_trackingChain = new TrackingChain(Safe.Network, HeaderChain);
+				_trackingChain = new TrackingChain(Safe.Network);
 			}
 
 			return _trackingChain;
 		}
 
-		private AddressManager AddressManager
+		private static AddressManager AddressManager
 		{
 			get
 			{
@@ -173,7 +172,7 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-		public ConcurrentChain HeaderChain
+		public static ConcurrentChain HeaderChain
 		{
 			get
 			{
@@ -204,7 +203,7 @@ namespace HBitcoin.FullBlockSpv
 		}
 		#endregion
 
-		public WalletJob(Safe safeToTrack, bool trackDefaultSafe = true, params SafeAccount[] accountsToTrack)
+		public static void Init(Safe safeToTrack, bool trackDefaultSafe = true, params SafeAccount[] accountsToTrack)
 	    {
 		    Safe = safeToTrack;
 		    if(accountsToTrack == null || !accountsToTrack.Any())
@@ -218,17 +217,17 @@ namespace HBitcoin.FullBlockSpv
 		    State = WalletState.NotStarted;
 	    }
 
-		#region SafeTracking
+		#region static SafeTracking
 
 		public const int MaxCleanAddressCount = 21;
-	    private void UpdateSafeTracking()
+	    private static void UpdateSafeTracking()
 		{
 			UpdateSafeTrackingByHdPathType(HdPathType.Receive);
 			UpdateSafeTrackingByHdPathType(HdPathType.Change);
 			UpdateSafeTrackingByHdPathType(HdPathType.NonHardened);
 		}
 
-		private void UpdateSafeTrackingByHdPathType(HdPathType hdPathType)
+		private static void UpdateSafeTrackingByHdPathType(HdPathType hdPathType)
 		{
 			if (TracksDefaultSafe) UpdateSafeTrackingByPath(hdPathType);
 
@@ -238,7 +237,7 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-		private void UpdateSafeTrackingByPath(HdPathType hdPathType, SafeAccount acccount = null)
+		private static void UpdateSafeTrackingByPath(HdPathType hdPathType, SafeAccount acccount = null)
 		{
 			int i = 0;
 			var cleanCount = 0;
@@ -255,7 +254,7 @@ namespace HBitcoin.FullBlockSpv
 				if(clean)
 				{
 					// if found in mempool it's not clean
-					if(MemPoolJob != null)
+					if(MemPoolJob.State == MemPoolState.Syncing)
 					{
 						foreach(var tx in MemPoolJob.TrackedTransactions)
 						{
@@ -283,8 +282,10 @@ namespace HBitcoin.FullBlockSpv
 		
 		#endregion
 
-		public async Task StartAsync(CancellationToken  ctsToken)
-	    {
+		public static async Task StartAsync(CancellationToken  ctsToken)
+		{
+			State = WalletState.SyncingBlocks;
+
 			Directory.CreateDirectory(WorkFolderPath);
 
 			TrackingChain.TrackedTransactions.CollectionChanged += delegate
@@ -301,18 +302,17 @@ namespace HBitcoin.FullBlockSpv
 			//So we don't have to load the chain each time we start
 			_connectionParameters.TemplateBehaviors.Add(new ChainBehavior(HeaderChain));
 
-			_nodes = new NodesGroup(Safe.Network, _connectionParameters,
+			Nodes = new NodesGroup(Safe.Network, _connectionParameters,
 				new NodeRequirement
 				{
 					RequiredServices = NodeServices.Network,
 					MinVersion = ProtocolVersion.SENDHEADERS_VERSION
 				});
-			var bp = new NodesBlockPuller(HeaderChain, _nodes.ConnectedNodes);
+			var bp = new NodesBlockPuller(HeaderChain, Nodes.ConnectedNodes);
 			_connectionParameters.TemplateBehaviors.Add(new NodesBlockPuller.NodesBlockPullerBehavior(bp));
-			_nodes.NodeConnectionParameters = _connectionParameters;
+			Nodes.NodeConnectionParameters = _connectionParameters;
 			BlockPuller = (LookaheadBlockPuller)bp;
-
-			MemPoolJob = new MemPoolJob(_nodes, TrackingChain);
+			
 		    MemPoolJob.StateChanged += delegate
 		    {
 			    if(MemPoolJob.State == MemPoolState.WaitingForBlockchainSync)
@@ -330,27 +330,25 @@ namespace HBitcoin.FullBlockSpv
 			    UpdateSafeHistory();
 		    };
 
-			_nodes.ConnectedNodes.Removed += delegate { OnConnectedNodeCountChanged(); };
-			_nodes.ConnectedNodes.Added += delegate { OnConnectedNodeCountChanged(); };
-			_nodes.Connect();
-
-			CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(ctsToken);
-
+			Nodes.ConnectedNodes.Removed += delegate { OnConnectedNodeCountChanged(); };
+			Nodes.ConnectedNodes.Added += delegate { OnConnectedNodeCountChanged(); };
+			Nodes.Connect();
+			
 		    var tasks = new HashSet<Task>
 		    {
-			    PeriodicSaveAsync(TimeSpan.FromMinutes(3), cts.Token),
-				BlockPullerJobAsync(cts.Token),
-				MemPoolJob.StartAsync(cts.Token)
+			    PeriodicSaveAsync(TimeSpan.FromMinutes(3), ctsToken),
+				BlockPullerJobAsync(ctsToken),
+				MemPoolJob.StartAsync(ctsToken)
 			};
 
 		    await Task.WhenAll(tasks).ConfigureAwait(false);
 
 		    State = WalletState.NotStarted;
 			await SaveAllAsync().ConfigureAwait(false);
-			_nodes.Dispose();
+			Nodes.Dispose();
 		}
 
-	    private void UpdateSafeHistory()
+	    private static void UpdateSafeHistory()
 	    {
 		    var scriptPubKeys = TrackingChain.TrackedScriptPubKeys;
 		    foreach(var scriptPubKey in scriptPubKeys)
@@ -433,7 +431,7 @@ namespace HBitcoin.FullBlockSpv
 	    /// <param name="receivedTransactions">int: block height</param>
 	    /// <param name="spentTransactions">int: block height</param>
 	    /// <returns></returns>
-	    public bool TryFindAllChainAndMemPoolTransactions(Script scriptPubKey, out Dictionary<Transaction, int> receivedTransactions, out Dictionary<Transaction, int> spentTransactions)
+	    public static bool TryFindAllChainAndMemPoolTransactions(Script scriptPubKey, out Dictionary<Transaction, int> receivedTransactions, out Dictionary<Transaction, int> spentTransactions)
 	    {
 			var found = false;
 			receivedTransactions = new Dictionary<Transaction, int>();
@@ -482,7 +480,7 @@ namespace HBitcoin.FullBlockSpv
 		/// 
 		/// </summary>
 		/// <returns>int: block height, -1 if mempool</returns>
-		public Dictionary<Transaction, int> GetAllChainAndMemPoolTransactions()
+		public static Dictionary<Transaction, int> GetAllChainAndMemPoolTransactions()
 		{
 			var transactions = new Dictionary<Transaction, int>();
 
@@ -498,7 +496,7 @@ namespace HBitcoin.FullBlockSpv
 				}
 				else
 				{
-					if (MemPoolJob != null)
+					if (MemPoolJob.State == MemPoolState.Syncing)
 					{
 						if (MemPoolJob.TryFindTransaction(tx.Key, out foundTransaction))
 						{
@@ -512,92 +510,71 @@ namespace HBitcoin.FullBlockSpv
 		}
 
 		#region BlockPulling
-		private static int timeoutDownSec = 10;
-		private async Task BlockPullerJobAsync(CancellationToken ctsToken)
-		{
-			while (true)
-			{
-				if (ctsToken.IsCancellationRequested)
-				{
-					return;
-				}
 
-				// the headerchain didn't catch up to the creationheight yet
-				if(EstimatedCreationHeight == -1)
-				{
-					await Task.Delay(1000, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
-					continue;
-				}
+	    private static async Task BlockPullerJobAsync(CancellationToken ctsToken)
+	    {
+		    while(true)
+		    {
+			    if(ctsToken.IsCancellationRequested)
+			    {
+				    return;
+			    }
 
-				if (HeaderChain.Height < EstimatedCreationHeight)
-				{
-					await Task.Delay(1000, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
-					continue;
-				}
+			    // the headerchain didn't catch up to the creationheight yet
+			    if(CreationHeight == -1)
+			    {
+				    await Task.Delay(1000, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+				    continue;
+			    }
 
-				int height;
-				if (TrackingChain.BlockCount == 0)
-				{
-					height = EstimatedCreationHeight;
-				}
-				else if (HeaderChain.Height <= TrackingChain.BestHeight)
-				{
-					await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
-					continue;
-				}
-				else
-				{
-					height = TrackingChain.BestHeight + 1;
-				}
+			    if(HeaderChain.Height < CreationHeight)
+			    {
+				    await Task.Delay(1000, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+				    continue;
+			    }
 
-				var chainedBlock = HeaderChain.GetBlock(height);
-				BlockPuller.SetLocation(new ChainedBlock(chainedBlock.Previous.Header, chainedBlock.Previous.Height));
-				Block block = null;
-				CancellationTokenSource ctsBlockDownload = CancellationTokenSource.CreateLinkedTokenSource(
-					new CancellationTokenSource(TimeSpan.FromSeconds(timeoutDownSec)).Token,
-					ctsToken);
-				try
-				{
-					block = await Task.Run(() => BlockPuller.NextBlock(ctsBlockDownload.Token)).ConfigureAwait(false);
-				}
-				catch (OperationCanceledException)
-				{
-					if (ctsToken.IsCancellationRequested) return;
-					
-					if (timeoutDownSec > 180)
-					{
-						timeoutDownSec = 20;
-						_nodes.Purge("no reason");
-					}
-					else timeoutDownSec = timeoutDownSec * 2; // adjust to the network speed
-					continue;
-				}
+			    int height;
+			    if(TrackingChain.BlockCount == 0)
+			    {
+				    height = CreationHeight;
+			    }
+			    else if(HeaderChain.Height <= TrackingChain.BestHeight)
+			    {
+				    await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+				    continue;
+			    }
+			    else
+			    {
+				    height = TrackingChain.BestHeight + 1;
+			    }
 
-				//reorg test
-				//if(new Random().Next(100) >= 60) block = null;
+			    var chainedBlock = HeaderChain.GetBlock(height);
+			    BlockPuller.SetLocation(new ChainedBlock(chainedBlock.Previous.Header, chainedBlock.Previous.Height));
+			    Block block = null;
+			    try
+			    {
+				    block = await Task.Run(() => BlockPuller.NextBlock(ctsToken)).ConfigureAwait(false);
+			    }
+			    catch(OperationCanceledException)
+			    {
+				    if(ctsToken.IsCancellationRequested) return;
+				    else continue;
+			    }
 
-				if (block == null) // then reorg happened
-				{
-					Reorg();
-					continue;
-				}
+			    //reorg test
+			    //if(new Random().Next(100) >= 60) block = null;
 
-				TrackingChain.Add(chainedBlock.Height, block);
+			    if(block == null) // then reorg happened
+			    {
+				    Reorg();
+				    continue;
+			    }
 
-				// check if chains are in sync, to be sure
-				var bh = TrackingChain.BestHeight;
-				for (int i = bh; i > bh - 6; i--)
-				{
-					if (!TrackingChain.Chain[i].MerkleProof.Header.GetHash()
-					.Equals(HeaderChain.GetBlock(i).Header.GetHash()))
-					{
-						// something worng, reorg
-						Reorg();
-					}
-				}
-			}
-		}
-		private void Reorg()
+			    TrackingChain.Add(chainedBlock.Height, block);
+		    }
+	    }
+
+	    private static void Reorg()
 		{
 			HeaderChain.SetTip(HeaderChain.Tip.Previous);
 			TrackingChain.ReorgOne();
@@ -605,7 +582,7 @@ namespace HBitcoin.FullBlockSpv
 		#endregion
 
 		#region Saving
-		private async Task PeriodicSaveAsync(TimeSpan delay, CancellationToken ctsToken)
+		private static async Task PeriodicSaveAsync(TimeSpan delay, CancellationToken ctsToken)
 		{
 			while (true)
 			{
@@ -617,7 +594,7 @@ namespace HBitcoin.FullBlockSpv
 				await Task.Delay(delay, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
 			}
 		}
-		private async Task SaveAllAsync()
+		private static async Task SaveAllAsync()
 		{
 			await SemaphoreSave.WaitAsync().ConfigureAwait(false);
 			try
@@ -632,7 +609,7 @@ namespace HBitcoin.FullBlockSpv
 
 			await TrackingChain.SaveAsync(_trackingChainFolderPath).ConfigureAwait(false);
 		}
-		private void SaveHeaderChain()
+		private static void SaveHeaderChain()
 		{
 			using (var fs = File.Open(_headerChainFilePath, FileMode.Create))
 			{

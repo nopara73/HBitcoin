@@ -16,7 +16,6 @@ namespace HBitcoin.FullBlockSpv
 
 		public Network Network { get; private set; }
 		public ObservableDictionary<int, TrackingBlock> Chain { get; } = new ObservableDictionary<int, TrackingBlock>();
-		private ConcurrentChain _headerChain;
 
 	    /// <summary>
 	    /// 
@@ -172,7 +171,6 @@ namespace HBitcoin.FullBlockSpv
 		public int WorstHeight => Chain.Count == 0 ? -1 : Chain.Values.Select(block => block.Height).Min();
 		public int BestHeight => Chain.Count == 0 ? -1 : Chain.Values.Select(block => block.Height).Max();
 		public int BlockCount => Chain.Count;
-		public bool Synced => BestHeight == _headerChain.Height;
 
 		#endregion
 
@@ -181,10 +179,9 @@ namespace HBitcoin.FullBlockSpv
 		private TrackingChain()
 		{
 		}
-		public TrackingChain(Network network, ConcurrentChain headerChain)
+		public TrackingChain(Network network)
 		{
 			Network = network;
-			_headerChain = headerChain;
 		}
 
 		#endregion
