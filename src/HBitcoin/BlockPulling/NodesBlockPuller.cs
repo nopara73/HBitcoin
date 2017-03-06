@@ -58,7 +58,7 @@ namespace Stratis.Bitcoin.BlockPulling
 					block.Object.Header.CacheHashes();
 					QualityScore = Math.Min(MaxQualityScore, QualityScore + 1);
 					uint256 unused;
-					if (!_PendingDownloads.TryRemove(block.Object.Header.GetHash(), out unused))
+					if(!_PendingDownloads.TryRemove(block.Object.Header.GetHash(), out unused))
 					{
 						//TODO: Add support for unsollicited block
 						// This can be sent by a miner discovering new block
@@ -70,9 +70,9 @@ namespace Stratis.Bitcoin.BlockPulling
 						return;
 					}
 					NodesBlockPullerBehavior unused2;
-					if (_Puller._Map.TryRemove(block.Object.Header.GetHash(), out unused2))
+					if(_Puller._Map.TryRemove(block.Object.Header.GetHash(), out unused2))
 					{
-						foreach (var tx in block.Object.Transactions)
+						foreach(var tx in block.Object.Transactions)
 							tx.CacheHashes();
 						_Puller.PushBlock((int)message.Length, block.Object, _Cts.Token);
 						this.AssignPendingVector();
@@ -82,10 +82,10 @@ namespace Stratis.Bitcoin.BlockPulling
 
 			internal void AssignPendingVector()
 			{
-				if (AttachedNode == null || AttachedNode.State != NodeState.HandShaked || !_Puller._Requirements.Check(AttachedNode.PeerVersion))
+				if(AttachedNode == null || AttachedNode.State != NodeState.HandShaked || !_Puller._Requirements.Check(AttachedNode.PeerVersion))
 					return;
 				uint256 block;
-				if (_Puller._PendingInventoryVectors.TryTake(out block))
+				if(_Puller._PendingInventoryVectors.TryTake(out block))
 				{
 					StartDownload(block);
 				}
@@ -93,7 +93,7 @@ namespace Stratis.Bitcoin.BlockPulling
 
 			internal void StartDownload(uint256 block)
 			{
-				if (_Puller._Map.TryAdd(block, this))
+				if(_Puller._Map.TryAdd(block, this))
 				{
 					_PendingDownloads.TryAdd(block, block);
 					AttachedNode.SendMessageAsync(new GetDataPayload(new InventoryVector(AttachedNode.AddSupportedOptions(InventoryType.MSG_BLOCK), block)));
@@ -103,7 +103,7 @@ namespace Stratis.Bitcoin.BlockPulling
 			//Caller should add to the puller map
 			internal void StartDownload(GetDataPayload getDataPayload)
 			{
-				foreach (var inv in getDataPayload.Inventory)
+				foreach(var inv in getDataPayload.Inventory)
 				{
 					inv.Type = AttachedNode.AddSupportedOptions(inv.Type);
 					_PendingDownloads.TryAdd(inv.Hash, inv.Hash);
@@ -121,9 +121,9 @@ namespace Stratis.Bitcoin.BlockPulling
 			{
 				_Cts.Cancel();
 				AttachedNode.MessageReceived -= Node_MessageReceived;
-				foreach (var download in _Puller._Map.ToArray())
+				foreach(var download in _Puller._Map.ToArray())
 				{
-					if (download.Value == this)
+					if(download.Value == this)
 					{
 						Release(download.Key);
 					}
@@ -134,7 +134,7 @@ namespace Stratis.Bitcoin.BlockPulling
 			{
 				NodesBlockPullerBehavior unused;
 				uint256 unused2;
-				if (_Puller._Map.TryRemove(blockHash, out unused))
+				if(_Puller._Map.TryRemove(blockHash, out unused))
 				{
 					_PendingDownloads.TryRemove(blockHash, out unused2);
 					_Puller._PendingInventoryVectors.Add(blockHash);
@@ -143,7 +143,7 @@ namespace Stratis.Bitcoin.BlockPulling
 
 			public void ReleaseAll()
 			{
-				foreach (var h in PendingDownloads.ToArray())
+				foreach(var h in PendingDownloads.ToArray())
 				{
 					Release(h);
 				}
@@ -225,11 +225,11 @@ namespace Stratis.Bitcoin.BlockPulling
 		private void AssignPendingVectors()
 		{
 			var nodes = GetNodeBehaviors();
-			if (nodes.Length == 0)
+			if(nodes.Length == 0)
 				return;
 			List<InventoryVector> vectors = new List<InventoryVector>();
 			uint256 result;
-			while (_PendingInventoryVectors.TryTake(out result))
+			while(_PendingInventoryVectors.TryTake(out result))
 			{
 				vectors.Add(new InventoryVector(InventoryType.MSG_BLOCK, result));
 			}
@@ -244,10 +244,10 @@ namespace Stratis.Bitcoin.BlockPulling
 		protected override void OnStalling(ChainedBlock chainedBlock)
 		{
 			NodesBlockPullerBehavior behavior = null;
-			if (_Map.TryGetValue(chainedBlock.HashBlock, out behavior))
+			if(_Map.TryGetValue(chainedBlock.HashBlock, out behavior))
 			{
 				behavior.QualityScore = Math.Max(MinQualityScore, behavior.QualityScore - 1);
-				if (behavior.QualityScore == MinQualityScore)
+				if(behavior.QualityScore == MinQualityScore)
 				{
 					// TODO: this does not necessarily mean the node is slow
 					// the best way is to check the nodes download speed, how
@@ -264,7 +264,7 @@ namespace Stratis.Bitcoin.BlockPulling
 
 		private void DistributeDownload(InventoryVector[] vectors, NodesBlockPullerBehavior[] nodes)
 		{
-			if (vectors.Length == 0)
+			if(vectors.Length == 0)
 				return;
 
 			// Be careful to not ask block to a node that do not have it 
@@ -273,14 +273,14 @@ namespace Stratis.Bitcoin.BlockPulling
 			foreach (var behavior in nodes)
 			{
 				// filter nodes that are still behind
-				if (behavior.BestKnownTip?.Height >= this.Location.Height)
+				if(behavior.BestKnownTip?.Height >= this.Location.Height)
 					selectnodes.Add(behavior);
 			}
 			nodes = selectnodes.ToArray();
 
 			if (nodes.Length == 0)
 			{
-				foreach (var v in vectors)
+				foreach(var v in vectors)
 					_PendingInventoryVectors.Add(v.Hash);
 				return;
 			}
@@ -288,17 +288,17 @@ namespace Stratis.Bitcoin.BlockPulling
 			var scores = nodes.Select(n => n.QualityScore == MaxQualityScore ? MaxQualityScore * 2 : n.QualityScore).ToArray();
 			var totalScore = scores.Sum();
 			GetDataPayload[] getDatas = nodes.Select(n => new GetDataPayload()).ToArray();
-			foreach (var inv in vectors)
+			foreach(var inv in vectors)
 			{
 				var index = GetNodeIndex(scores, totalScore);
 				var node = nodes[index];
 				var getData = getDatas[index];
-				if (_Map.TryAdd(inv.Hash, node))
+				if(_Map.TryAdd(inv.Hash, node))
 					getData.Inventory.Add(inv);
 			}
-			for (int i = 0; i < nodes.Length; i++)
+			for(int i = 0; i < nodes.Length; i++)
 			{
-				if (getDatas[i].Inventory.Count == 0)
+				if(getDatas[i].Inventory.Count == 0)
 					continue;
 				nodes[i].StartDownload(getDatas[i]);
 			}
@@ -313,10 +313,10 @@ namespace Stratis.Bitcoin.BlockPulling
 			var v = _Rand.Next(totalScore);
 			var current = 0;
 			int i = 0;
-			foreach (var score in scores)
+			foreach(var score in scores)
 			{
 				current += score;
-				if (v < current)
+				if(v < current)
 					return i;
 				i++;
 			}
@@ -330,12 +330,12 @@ namespace Stratis.Bitcoin.BlockPulling
 		};
 		public override void RequestOptions(TransactionOptions transactionOptions)
 		{
-			if (transactionOptions == TransactionOptions.Witness)
+			if(transactionOptions == TransactionOptions.Witness)
 			{
 				_Requirements.RequiredServices |= NodeServices.NODE_WITNESS;
-				foreach (var node in _Nodes.Select(n => n.Behaviors.Find<NodesBlockPullerBehavior>()))
+				foreach(var node in _Nodes.Select(n => n.Behaviors.Find<NodesBlockPullerBehavior>()))
 				{
-					if (!_Requirements.Check(node.AttachedNode.PeerVersion))
+					if(!_Requirements.Check(node.AttachedNode.PeerVersion))
 					{
 						node.ReleaseAll();
 					}

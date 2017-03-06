@@ -98,7 +98,7 @@ namespace Stratis.Bitcoin.BlockPulling
 
 		public override void SetLocation(ChainedBlock tip)
 		{
-			if (tip == null)
+			if(tip == null)
 				throw new ArgumentNullException(nameof(tip));
 			_Location = tip;
 		}
@@ -112,18 +112,18 @@ namespace Stratis.Bitcoin.BlockPulling
 		public override Block NextBlock(CancellationToken cancellationToken)
 		{
 			_DownloadedCounts.Add(_DownloadedBlocks.Count);
-			if (_LookaheadLocation == null)
+			if(_LookaheadLocation == null)
 			{
 				AskBlocks();
 				AskBlocks();
 			}
 			var block = NextBlockCore(cancellationToken);
-			if (block == null)
+			if(block == null)
 			{
 				//A reorg
 				return null;
 			}
-			if ((_LookaheadLocation.Height - _Location.Height) <= ActualLookahead)
+			if((_LookaheadLocation.Height - _Location.Height) <= ActualLookahead)
 			{
 				CalculateLookahead();
 				AskBlocks();
@@ -134,7 +134,7 @@ namespace Stratis.Bitcoin.BlockPulling
 		private static decimal GetMedian(List<int> sourceNumbers)
 		{
 			//Framework 2.0 version of this method. there is an easier way in F4
-			if (sourceNumbers == null || sourceNumbers.Count == 0)
+			if(sourceNumbers == null || sourceNumbers.Count == 0)
 				throw new Exception("Median of empty array not defined.");
 
 			//make sure the list is sorted, but use a new array
@@ -158,9 +158,9 @@ namespace Stratis.Bitcoin.BlockPulling
 			var expectedDownload = ActualLookahead * 1.1m;
 			decimal tolerance = 0.05m;
 			var margin = expectedDownload * tolerance;
-			if (medianDownloads <= expectedDownload - margin)
+			if(medianDownloads <= expectedDownload - margin)
 				ActualLookahead = (int)Math.Max(ActualLookahead * 1.1m, ActualLookahead + 1);
-			else if (medianDownloads >= expectedDownload + margin)
+			else if(medianDownloads >= expectedDownload + margin)
 				ActualLookahead = (int)Math.Min(ActualLookahead / 1.1m, ActualLookahead - 1);
 		}
 
@@ -168,7 +168,7 @@ namespace Stratis.Bitcoin.BlockPulling
 		{
 			get
 			{
-				if (_DownloadedCounts.Count == 0)
+				if(_DownloadedCounts.Count == 0)
 					return decimal.One;
 				return GetMedian(_DownloadedCounts);
 			}
@@ -177,10 +177,10 @@ namespace Stratis.Bitcoin.BlockPulling
 		public Block TryGetLookahead(int count)
 		{
 			var chainedBlock = Chain.GetBlock(_Location.Height + 1 + count);
-			if (chainedBlock == null)
+			if(chainedBlock == null)
 				return null;
 			var block = _DownloadedBlocks.TryGet(chainedBlock.HashBlock);
-			if (block == null)
+			if(block == null)
 				return null;
 			return block.Block;
 		}
@@ -209,12 +209,12 @@ namespace Stratis.Bitcoin.BlockPulling
 		}
 
 		// making this method public allows to push blocks directly
-		// to the downloader, this is mainly usefull for testing.
+		// to the downloader, used for testing and mining.
 		public void PushBlock(int length, Block block, CancellationToken cancellation)
 		{
 			var hash = block.Header.GetHash();
 			var header = Chain.GetBlock(hash);
-			while (_CurrentSize + length >= MaxBufferedSize && header.Height != _Location.Height + 1)
+			while(_CurrentSize + length >= MaxBufferedSize && header.Height != _Location.Height + 1)
 			{
 				IsFull = true;
 				_Consumed.WaitOne(1000);
@@ -228,27 +228,27 @@ namespace Stratis.Bitcoin.BlockPulling
 
 		private void AskBlocks()
 		{
-			if (_Location == null)
+			if(_Location == null)
 				throw new InvalidOperationException("SetLocation should have been called");
-			if (_LookaheadLocation == null && !Chain.Contains(_Location))
+			if(_LookaheadLocation == null && !Chain.Contains(_Location))
 				return;
-			if (_LookaheadLocation != null && !Chain.Contains(_LookaheadLocation))
+			if(_LookaheadLocation != null && !Chain.Contains(_LookaheadLocation))
 				_LookaheadLocation = null;
 
 			ChainedBlock[] downloadRequests = null;
 
 			ChainedBlock lookaheadBlock = _LookaheadLocation ?? _Location;
 			ChainedBlock nextLookaheadBlock = Chain.GetBlock(Math.Min(lookaheadBlock.Height + ActualLookahead, Chain.Height));
-			if (nextLookaheadBlock == null)
+			if(nextLookaheadBlock == null)
 				return;
 			var fork = nextLookaheadBlock.FindFork(lookaheadBlock);
 
 			_LookaheadLocation = nextLookaheadBlock;
 
 			downloadRequests = new ChainedBlock[nextLookaheadBlock.Height - fork.Height];
-			if (downloadRequests.Length == 0)
+			if(downloadRequests.Length == 0)
 				return;
-			for (int i = 0; i < downloadRequests.Length; i++)
+			for(int i = 0; i < downloadRequests.Length; i++)
 			{
 				downloadRequests[downloadRequests.Length - i - 1] = nextLookaheadBlock;
 				nextLookaheadBlock = nextLookaheadBlock.Previous;
@@ -261,14 +261,14 @@ namespace Stratis.Bitcoin.BlockPulling
 		private Block NextBlockCore(CancellationToken cancellationToken)
 		{
 			int i = 0;
-			while (true)
+			while(true)
 			{
 				cancellationToken.ThrowIfCancellationRequested();
 				var header = Chain.GetBlock(_Location.Height + 1);
 				DownloadedBlock block;
-				if (header != null && _DownloadedBlocks.TryRemove(header.HashBlock, out block))
+				if(header != null && _DownloadedBlocks.TryRemove(header.HashBlock, out block))
 				{
-					if (header.Previous.HashBlock != _Location.HashBlock)
+					if(header.Previous.HashBlock != _Location.HashBlock)
 					{
 						//A reorg
 						return null;
@@ -281,9 +281,9 @@ namespace Stratis.Bitcoin.BlockPulling
 				}
 				else
 				{
-					if (header == null)
+					if(header == null)
 					{
-						if (!Chain.Contains(_Location.HashBlock))
+						if(!Chain.Contains(_Location.HashBlock))
 						{
 							//A reorg
 							return null;
@@ -291,7 +291,7 @@ namespace Stratis.Bitcoin.BlockPulling
 					}
 					else
 					{
-						if (!IsDownloading(header.HashBlock))
+						if(!IsDownloading(header.HashBlock))
 							AskBlocks(new ChainedBlock[] { header });
 						OnStalling(header);
 						IsStalling = true;

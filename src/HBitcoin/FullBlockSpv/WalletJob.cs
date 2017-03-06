@@ -510,9 +510,9 @@ namespace HBitcoin.FullBlockSpv
 		}
 
 		#region BlockPulling
-
-	    private static async Task BlockPullerJobAsync(CancellationToken ctsToken)
-	    {
+		private static async Task BlockPullerJobAsync(CancellationToken ctsToken)
+		{
+			int currTimeoutDownSec = 10;
 		    while(true)
 		    {
 			    if(ctsToken.IsCancellationRequested)
@@ -551,20 +551,37 @@ namespace HBitcoin.FullBlockSpv
 			    var chainedBlock = HeaderChain.GetBlock(height);
 			    BlockPuller.SetLocation(new ChainedBlock(chainedBlock.Previous.Header, chainedBlock.Previous.Height));
 			    Block block = null;
-			    try
-			    {
-				    block = await Task.Run(() => BlockPuller.NextBlock(ctsToken)).ConfigureAwait(false);
-			    }
-			    catch(OperationCanceledException)
-			    {
-				    if(ctsToken.IsCancellationRequested) return;
-				    else continue;
-			    }
+				CancellationTokenSource ctsBlockDownload = CancellationTokenSource.CreateLinkedTokenSource(
+					new CancellationTokenSource(TimeSpan.FromSeconds(currTimeoutDownSec)).Token,
+					ctsToken);
+				try
+				{
+					block = await Task.Run(() => BlockPuller.NextBlock(ctsBlockDownload.Token)).ConfigureAwait(false);
+				}
+				catch (OperationCanceledException)
+				{
+					if (ctsToken.IsCancellationRequested) return;
 
-			    //reorg test
-			    //if(new Random().Next(100) >= 60) block = null;
+					// if the block takse more than 2min to download then something wrong purge
+					const int maxSec = 180;
+					if(currTimeoutDownSec > maxSec)
+					{
+						currTimeoutDownSec = 20;
+						Nodes.Purge("no reason");
+						System.Diagnostics.Debug.WriteLine($"Purging nodes, reason:{nameof(currTimeoutDownSec)} > {maxSec}");
+					}
+					else
+					{
+						currTimeoutDownSec = currTimeoutDownSec * 2; // adjust to the network speed
+						System.Diagnostics.Debug.WriteLine($"Adjusting network speed: {nameof(currTimeoutDownSec)} -> {currTimeoutDownSec}");
+					}
+					continue;
+				}
 
-			    if(block == null) // then reorg happened
+				//reorg test
+				//if(new Random().Next(100) >= 60) block = null;
+
+				if (block == null) // then reorg happened
 			    {
 				    Reorg();
 				    continue;

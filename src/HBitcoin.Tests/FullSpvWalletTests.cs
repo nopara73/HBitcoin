@@ -18,8 +18,8 @@ namespace HBitcoin.Tests
 		public void SycingTest()
 		{
 			// load wallet
-			Network network = Network.TestNet;
-			const string path = "Wallets/EmptyTestSafe.json";
+			Network network = Network.Main;
+			string path = $"Wallets/Empty{network}.json";
 			const string password = "";
 			Safe safe;
 			if (File.Exists(path))
@@ -43,9 +43,9 @@ namespace HBitcoin.Tests
 				if(WalletJob.MaxConnectedNodeCount == WalletJob.ConnectedNodeCount)
 				{
 					fullyConnected = true;
-					System.Diagnostics.Debug.WriteLine($"{nameof(WalletJob.MaxConnectedNodeCount)} reached:");
+					System.Diagnostics.Debug.WriteLine($"{nameof(WalletJob.MaxConnectedNodeCount)} reached: {WalletJob.MaxConnectedNodeCount}");
 				}
-				System.Diagnostics.Debug.WriteLine($"{nameof(WalletJob.ConnectedNodeCount)}: {WalletJob.ConnectedNodeCount}");
+				else System.Diagnostics.Debug.WriteLine($"{nameof(WalletJob.ConnectedNodeCount)}: {WalletJob.ConnectedNodeCount}");
 			};
 			WalletJob.StateChanged += delegate
 			{
