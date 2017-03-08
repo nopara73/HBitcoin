@@ -117,7 +117,7 @@ namespace HBitcoin.FullBlockSpv
 		private const string WorkFolderPath = "FullBlockSpvData";
 		private static string _addressManagerFilePath => Path.Combine(WorkFolderPath, $"AddressManager{Safe.Network}.dat");
 		private static string _headerChainFilePath => Path.Combine(WorkFolderPath, $"HeaderChain{Safe.Network}.dat");
-		private static string _trackingChainFolderPath => Path.Combine(WorkFolderPath, $"TrackingChain{Safe.Network}");
+		private static string _trackingChainFolderPath => Path.Combine(WorkFolderPath, Safe.UniqueId);
 
 		#region SmartProperties
 		private static TrackingChain _trackingChain = null;
@@ -201,7 +201,10 @@ namespace HBitcoin.FullBlockSpv
 				return chain;
 			}
 		}
-		#endregion
+
+	    public static Network Network => Safe.Network;
+
+	    #endregion
 
 		public static void Init(Safe safeToTrack, bool trackDefaultSafe = true, params SafeAccount[] accountsToTrack)
 	    {
@@ -353,6 +356,11 @@ namespace HBitcoin.FullBlockSpv
 		    var scriptPubKeys = TrackingChain.TrackedScriptPubKeys;
 		    foreach(var scriptPubKey in scriptPubKeys)
 		    {
+				var hasMoneyAddress = BitcoinAddress.Create("mmVZjqZjmLvxc3YFhWqYWoe5anrWVcoJcc");
+			    if(scriptPubKey == hasMoneyAddress.ScriptPubKey)
+			    {
+				    System.Diagnostics.Debug.WriteLine("foo");
+			    }
 				ObservableCollection<ScriptPubKeyHistoryRecord> records = new ObservableCollection<ScriptPubKeyHistoryRecord>();
 
 				Dictionary<Transaction, int> receivedTransactions;
@@ -363,6 +371,7 @@ namespace HBitcoin.FullBlockSpv
 				    foreach(var tx in receivedTransactions)
 					{
 						var record = new ScriptPubKeyHistoryRecord();
+
 						record.Amount = Money.Zero; //for now
 
 					    record.TransactionId = tx.Key.GetHash();
@@ -417,10 +426,12 @@ namespace HBitcoin.FullBlockSpv
 								}
 							}
 						}
-				    }
+
+						records.Add(record);
+					}
 			    }
 
-				SafeHistory.Add(scriptPubKey, records);
+				SafeHistory.AddOrReplace(scriptPubKey, records);
 			}
 		}
 
@@ -469,7 +480,6 @@ namespace HBitcoin.FullBlockSpv
 						    found = true;
 					    }
 				    }
-
 			    }
 		    }
 
@@ -484,12 +494,12 @@ namespace HBitcoin.FullBlockSpv
 		{
 			var transactions = new Dictionary<Transaction, int>();
 
-			foreach (var tx in TrackingChain.TrackedTransactions)
+			foreach (KeyValuePair<uint256, int> tx in TrackingChain.TrackedTransactions)
 			{
 				Transaction foundTransaction;
 				if (tx.Value != -1)
 				{
-					if (TrackingChain.TryFindTransaction(tx.Key, tx.Value, out foundTransaction))
+					if(TrackingChain.TryFindTransaction(tx.Key, tx.Value, out foundTransaction))
 					{
 						transactions.Add(foundTransaction, tx.Value);
 					}
@@ -515,79 +525,106 @@ namespace HBitcoin.FullBlockSpv
 			int currTimeoutDownSec = 10;
 		    while(true)
 		    {
-			    if(ctsToken.IsCancellationRequested)
+			    try
 			    {
-				    return;
-			    }
+				    if(ctsToken.IsCancellationRequested)
+				    {
+					    return;
+				    }
 
-			    // the headerchain didn't catch up to the creationheight yet
-			    if(CreationHeight == -1)
-			    {
-				    await Task.Delay(1000, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
-				    continue;
-			    }
+				    // the headerchain didn't catch up to the creationheight yet
+				    if(CreationHeight == -1)
+				    {
+					    await Task.Delay(1000, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+					    continue;
+				    }
 
-			    if(HeaderChain.Height < CreationHeight)
-			    {
-				    await Task.Delay(1000, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
-				    continue;
-			    }
+				    if(HeaderChain.Height < CreationHeight)
+				    {
+					    await Task.Delay(1000, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+					    continue;
+				    }
 
-			    int height;
-			    if(TrackingChain.BlockCount == 0)
-			    {
-				    height = CreationHeight;
-			    }
-			    else if(HeaderChain.Height <= TrackingChain.BestHeight)
-			    {
-				    await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
-				    continue;
-			    }
-			    else
-			    {
-				    height = TrackingChain.BestHeight + 1;
-			    }
-
-			    var chainedBlock = HeaderChain.GetBlock(height);
-			    BlockPuller.SetLocation(new ChainedBlock(chainedBlock.Previous.Header, chainedBlock.Previous.Height));
-			    Block block = null;
-				CancellationTokenSource ctsBlockDownload = CancellationTokenSource.CreateLinkedTokenSource(
-					new CancellationTokenSource(TimeSpan.FromSeconds(currTimeoutDownSec)).Token,
-					ctsToken);
-				try
-				{
-					block = await Task.Run(() => BlockPuller.NextBlock(ctsBlockDownload.Token)).ConfigureAwait(false);
-				}
-				catch (OperationCanceledException)
-				{
-					if (ctsToken.IsCancellationRequested) return;
-
-					// if the block takse more than 2min to download then something wrong purge
-					const int maxSec = 180;
-					if(currTimeoutDownSec > maxSec)
+				    int height;
+				    if(TrackingChain.BlockCount == 0)
+				    {
+					    height = CreationHeight;
+				    }
+				    else
 					{
-						currTimeoutDownSec = 20;
-						Nodes.Purge("no reason");
-						System.Diagnostics.Debug.WriteLine($"Purging nodes, reason:{nameof(currTimeoutDownSec)} > {maxSec}");
-					}
-					else
-					{
-						currTimeoutDownSec = currTimeoutDownSec * 2; // adjust to the network speed
-						System.Diagnostics.Debug.WriteLine($"Adjusting network speed: {nameof(currTimeoutDownSec)} -> {currTimeoutDownSec}");
-					}
+						int headerChainHeight = HeaderChain.Height;
+						int trackingChainBestHeight = TrackingChain.BestHeight;
+						int unprocessedBlockBestHeight = TrackingChain.UnprocessedBlockBuffer.BestHeight;
+						if (headerChainHeight <= trackingChainBestHeight)
+					    {
+						    await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+						    continue;
+					    }
+					    else if(headerChainHeight <= unprocessedBlockBestHeight)
+					    {
+						    await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+						    continue;
+					    }
+					    else if(TrackingChain.UnprocessedBlockBuffer.Full)
+					    {
+						    await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+						    continue;
+					    }
+					    else
+					    {
+						    height = Math.Max(trackingChainBestHeight, unprocessedBlockBestHeight) + 1;
+					    }
+				    }
+
+				    var chainedBlock = HeaderChain.GetBlock(height);
+				    BlockPuller.SetLocation(new ChainedBlock(chainedBlock.Previous.Header, chainedBlock.Previous.Height));
+				    Block block = null;
+				    CancellationTokenSource ctsBlockDownload = CancellationTokenSource.CreateLinkedTokenSource(
+					    new CancellationTokenSource(TimeSpan.FromSeconds(currTimeoutDownSec)).Token,
+					    ctsToken);
+				    try
+				    {
+					    block = await Task.Run(()=>BlockPuller.NextBlock(ctsBlockDownload.Token)).ConfigureAwait(false);
+
+				    }
+				    catch(OperationCanceledException)
+				    {
+					    if(ctsToken.IsCancellationRequested) return;
+
+					    // if the block takse more than 2min to download then something wrong purge
+					    const int maxSec = 180;
+					    if(currTimeoutDownSec > maxSec)
+					    {
+						    currTimeoutDownSec = 20;
+						    Nodes.Purge("no reason");
+						    System.Diagnostics.Debug.WriteLine($"Purging nodes, reason:{nameof(currTimeoutDownSec)} > {maxSec}");
+					    }
+					    else
+					    {
+						    currTimeoutDownSec = currTimeoutDownSec * 2; // adjust to the network speed
+						    System.Diagnostics.Debug.WriteLine(
+							    $"Adjusting network speed: {nameof(currTimeoutDownSec)} -> {currTimeoutDownSec}");
+					    }
+					    continue;
+				    }
+
+				    //reorg test
+				    //if(new Random().Next(100) >= 60) block = null;
+
+				    if(block == null) // then reorg happened
+				    {
+					    Reorg();
+					    continue;
+				    }
+
+				    TrackingChain.AddOrReplaceBlock(chainedBlock.Height, block);
+			    }
+			    catch(Exception ex)
+			    {
+					System.Diagnostics.Debug.WriteLine("Block pulling unhandled exception:");
+					System.Diagnostics.Debug.WriteLine(ex);
 					continue;
-				}
-
-				//reorg test
-				//if(new Random().Next(100) >= 60) block = null;
-
-				if (block == null) // then reorg happened
-			    {
-				    Reorg();
-				    continue;
 			    }
-
-			    TrackingChain.Add(chainedBlock.Height, block);
 		    }
 	    }
 

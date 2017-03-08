@@ -8,17 +8,24 @@ namespace HBitcoin.FullBlockSpv
 	public class TrackingBlock
 	{
 		public int Height { get; private set; }
-		public MerkleBlock MerkleProof { get; set; } = new MerkleBlock();
+		public MerkleBlock MerkleProof { get; private set; } = new MerkleBlock();
 		public HashSet<Transaction> TrackedTransactions { get; private set; } = new HashSet<Transaction>();
 
 		// random bytes to separate data, not very elegant
 		private static readonly byte[] txSep = new byte[] { 0x30, 0x15, 0x7A, 0x29, 0x5F, 0x1D, 0x7D };
 		private static readonly byte[] membSep = new byte[] { 0x3D, 0x16, 0x22, 0x3D, 0x73, 0x50, 0x1 };
-
-		public TrackingBlock(int height, MerkleBlock merkleProof)
+		
+		public TrackingBlock(int height, Block block, params uint256[] interestedTransactionIds)
 		{
 			Height = height;
-			MerkleProof = merkleProof;
+			MerkleProof = interestedTransactionIds == null || interestedTransactionIds.Length == 0 ? block.Filter() : block.Filter(interestedTransactionIds);
+			foreach(var tx in block.Transactions)
+			{
+				if(interestedTransactionIds.Contains(tx.GetHash()))
+				{
+					TrackedTransactions.Add(tx);
+				}
+			}
 		}
 
 		public TrackingBlock()

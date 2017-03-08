@@ -61,67 +61,84 @@ namespace HBitcoin.MemPool
 
 			while (true)
 			{
-				if (ctsToken.IsCancellationRequested)
+				try
 				{
-					Transactions.Clear();
-					State = MemPoolState.NotStarted;
-					return;
-				}
+					if(ctsToken.IsCancellationRequested)
+					{
+						Transactions.Clear();
+						State = MemPoolState.NotStarted;
+						return;
+					}
 
-				if (WalletJob.Nodes.ConnectedNodes.Count <= 3 || !WalletJob.ChainsInSync)
+					if(WalletJob.Nodes.ConnectedNodes.Count <= 3 || !WalletJob.ChainsInSync)
+					{
+						State = MemPoolState.WaitingForBlockchainSync;
+						await Task.Delay(100, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
+						continue;
+					}
+					State = MemPoolState.Syncing;
+
+					_confirmationHappening = false;
+					HashSet<Task> tasks = new HashSet<Task> {Task.CompletedTask};
+					foreach(var node in WalletJob.Nodes.ConnectedNodes)
+					{
+						tasks.Add(FillTransactionsAsync(node, ctsToken));
+					}
+
+					await Task.WhenAll(tasks).ConfigureAwait(false);
+
+					await Task.Delay(1000, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
+				}
+				catch(Exception ex)
 				{
-					State = MemPoolState.WaitingForBlockchainSync;
-					await Task.Delay(100, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
-					continue;
+					System.Diagnostics.Debug.WriteLine("Ignoring MemPool exception:");
+					System.Diagnostics.Debug.WriteLine(ex);
 				}
-				State = MemPoolState.Syncing;
-
-				confirmationHappening = false;
-				HashSet<Task> tasks = new HashSet<Task> { Task.CompletedTask };
-				foreach (var node in WalletJob.Nodes.ConnectedNodes)
-				{
-					tasks.Add(FillTransactionsAsync(node, ctsToken));
-				}
-
-				await Task.WhenAll(tasks).ConfigureAwait(false);
-
-				await Task.Delay(1000, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
 			}
 		}
 
-		private static bool confirmationHappening = false;
-
+		private static bool _confirmationHappening = false;
+		private static int _lastSeenBlockHeight = 0;
 		private static async Task ClearTransactionsWhenConfirmationJobAsync(CancellationToken ctsToken)
 		{
-			while (true)
+			while(true)
 			{
-				if (ctsToken.IsCancellationRequested) return;
+				if(ctsToken.IsCancellationRequested) return;
 
-				if (!WalletJob.ChainsInSync)
+				while(_confirmationHappening)
 				{
-					if (Transactions.Count != 0)
+					if (ctsToken.IsCancellationRequested) return;
+					await Task.Delay(10, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
+				}
+
+				var currentBlockHeight = WalletJob.BestHeight;
+				if(_lastSeenBlockHeight == currentBlockHeight) continue;
+				if(_lastSeenBlockHeight == 0) _lastSeenBlockHeight = currentBlockHeight;
+				else _lastSeenBlockHeight++;
+				_confirmationHappening = true;
+				Transactions.Clear();
+
+				// a block just confirmed, take out the ones we are concerned
+				if (TrackedTransactions.Count == 0) continue;
+				if(WalletJob.TrackingChain.TrackedTransactions.Count == 0) continue;
+				IEnumerable<uint256> justConfirmedTransactions;
+				try
+				{
+					 justConfirmedTransactions = WalletJob.TrackingChain.TrackedTransactions
+						.Where(x => x.Value.Equals(_lastSeenBlockHeight))
+						.Select(x => x.Key);
+				}
+				catch(ArgumentNullException)
+				{
+					continue;
+				}
+				
+				foreach(var tx in justConfirmedTransactions)
+				{
+					foreach(var ttx in TrackedTransactions)
 					{
-						confirmationHappening = true;
-						Transactions.Clear();
-
-						while(confirmationHappening)
-						{
-							await Task.Delay(10, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
-						}
-						if (ctsToken.IsCancellationRequested) return;
-
-						// a block just confirmed, take out the ones we are concerned
-						if(WalletJob.TrackingChain.FullBlockBuffer.Count != 0)
-						{
-							foreach(Transaction tx in WalletJob.TrackingChain.FullBlockBuffer[WalletJob.TrackingChain.FullBlockBuffer.Keys.Max()].Transactions)
-							{
-								foreach(var ttx in TrackedTransactions)
-								{
-									if(tx.GetHash().Equals(ttx.GetHash()))
-										TrackedTransactions.Remove(ttx);
-								}
-							}
-						}
+						if (tx.Equals(ttx.GetHash()))
+							TrackedTransactions.Remove(ttx);
 					}
 				}
 
@@ -138,15 +155,17 @@ namespace HBitcoin.MemPool
 
 			try
 			{
+				if (!node.IsConnected) return;
 				uint256[] txIds = node.GetMempool(ctsToken);
 				if(ctsToken.IsCancellationRequested) return;
 
 				var txIdsPieces = Util.Split(txIds, 500);
 				foreach(var txIdsPiece in txIdsPieces)
 				{
-					foreach(var tx in node.GetMempoolTransactions(txIdsPiece.ToArray(), ctsToken))
+					if (!node.IsConnected) return;
+					foreach (var tx in node.GetMempoolTransactions(txIdsPiece.ToArray(), ctsToken))
 					{
-						if(confirmationHappening) return;
+						if(_confirmationHappening) return;
 						if(ctsToken.IsCancellationRequested) return;
 
 						Transactions.AddOrReplace(tx.GetHash(), tx);
@@ -187,10 +206,11 @@ namespace HBitcoin.MemPool
 			{
 				return;
 			}
-			catch(Exception)
+			catch(Exception e)
 			{
 				if (ctsToken.IsCancellationRequested) return;
-				else throw;
+				if (e.Message.StartsWith("Invalid Node state", StringComparison.OrdinalIgnoreCase)) return;
+				throw;
 			}
 		}
 	}

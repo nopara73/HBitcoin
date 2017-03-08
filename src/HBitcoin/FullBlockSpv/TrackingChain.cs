@@ -122,6 +122,7 @@ namespace HBitcoin.FullBlockSpv
 	    {
 			transaction = null;
 			if (blockHeight == -1) return false;
+			if (BestHeight < blockHeight) return false;
 
 		    try
 		    {
@@ -147,26 +148,8 @@ namespace HBitcoin.FullBlockSpv
 			= new ObservableDictionary<uint256, int>();
 		public HashSet<Script> TrackedScriptPubKeys { get; }
 			= new HashSet<Script>();
-		private readonly ConcurrentDictionary<int, Block> _fullBlockBuffer = new ConcurrentDictionary<int, Block>();
-		/// <summary>
-		/// int: block height
-		/// Max blocks in Memory is 50, removes the oldest one automatically if full
-		///  </summary>
-		public ConcurrentDictionary<int, Block> FullBlockBuffer
-		{
-			get
-			{
-				// Don't keep more than 50 blocks in memory
-				while (_fullBlockBuffer.Count >= 50)
-				{
-					// Remove the oldest block
-					var smallest = _fullBlockBuffer.Keys.Min();
-					Block b;
-					_fullBlockBuffer.TryRemove(smallest, out b);
-				}
-				return _fullBlockBuffer;
-			}
-		}
+
+	    public readonly UnprocessedBlockBuffer UnprocessedBlockBuffer = new UnprocessedBlockBuffer();
 
 		public int WorstHeight => Chain.Count == 0 ? -1 : Chain.Values.Select(block => block.Height).Min();
 		public int BestHeight => Chain.Count == 0 ? -1 : Chain.Values.Select(block => block.Height).Max();
@@ -182,6 +165,7 @@ namespace HBitcoin.FullBlockSpv
 		public TrackingChain(Network network)
 		{
 			Network = network;
+			UnprocessedBlockBuffer.HaveBlocks += UnprocessedBlockBuffer_HaveBlocks;
 		}
 
 		#endregion
@@ -205,40 +189,12 @@ namespace HBitcoin.FullBlockSpv
 
 			// if didn't track it yet add to tracked transactions
 			TrackedTransactions.AddOrReplace(transactionId, -1);
-
-			// search through the buffer, just in case
-			foreach (var b in FullBlockBuffer.Values)
-			{
-				Transaction tx = b.Transactions.FirstOrDefault(x => transactionId.Equals(x.GetHash()));
-				if (tx != default(Transaction))
-				{
-					// if found it set tx and blocks
-					TrackingBlock trackingBlock =
-					Chain.First(x => b.Header.GetHash().Equals(x.Value.MerkleProof.Header.GetHash())).Value;
-
-					trackingBlock.TrackedTransactions.Add(tx);
-					var transactionHashes = trackingBlock.MerkleProof.PartialMerkleTree.GetMatchedTransactions() as HashSet<uint256>;
-					transactionHashes.Add(tx.GetHash());
-					trackingBlock.MerkleProof = b.Filter(transactionHashes.ToArray());
-
-					return true; // since it is confirmed
-				}
-			}
 			return false; // since it didn't found, didn't confirmed
 		}
 		/// <param name="scriptPubKey">BitcoinAddress.ScriptPubKey</param>
-		/// <param name="searchFullBlockBuffer">If true: it looks for transactions in the buffered full blocks in memory</param>
-		public void Track(Script scriptPubKey, bool searchFullBlockBuffer = false)
+		public void Track(Script scriptPubKey)
 		{
 			TrackedScriptPubKeys.Add(scriptPubKey);
-
-			if(searchFullBlockBuffer)
-			{
-				foreach(var block in FullBlockBuffer)
-				{
-					TrackIfFindRelatedTransactions(scriptPubKey, block.Key, block.Value);
-				}
-			}
 		}
 
 		/// <summary>
@@ -247,10 +203,10 @@ namespace HBitcoin.FullBlockSpv
 		/// <param name="scriptPubKey"></param>
 		/// <param name="height"></param>
 		/// <param name="block"></param>
-		/// <returns>true if found an already confirmed transaction in a block)</returns>
-		private bool TrackIfFindRelatedTransactions(Script scriptPubKey, int height, Block block)
+		/// <returns>empty collection if not found any</returns>
+		private HashSet<uint256> TrackIfFindRelatedTransactions(Script scriptPubKey, int height, Block block)
 		{
-			var found = false;
+			var found = new HashSet<uint256>();
 			foreach (var tx in block.Transactions)
 			{
 				foreach (var output in tx.Outputs)
@@ -258,7 +214,7 @@ namespace HBitcoin.FullBlockSpv
 					if (output.ScriptPubKey.Equals(scriptPubKey))
 					{
 						TrackedTransactions.AddOrReplace(tx.GetHash(), height);
-						found = true;
+						found.Add(tx.GetHash());
 					}
 				}
 			}
@@ -301,27 +257,29 @@ namespace HBitcoin.FullBlockSpv
 					}
 				}
 			}
-
-			// remove the last block from the buffer too
-			Block b;
-			if (FullBlockBuffer.Count() != 0)
-			{
-				FullBlockBuffer.TryRemove(FullBlockBuffer.Keys.Max(), out b);
-			}
 		}
 
-		public void Add(int height, Block block)
+	    public void AddOrReplaceBlock(int height, Block block)
+	    {
+		    UnprocessedBlockBuffer.TryAddOrReplace(height, block);
+	    }
+
+	    private void ProcessBlock(int height, Block block)
 		{
+			HashSet<uint256> justFoundTransactions = new HashSet<uint256>();
+
 			// 1. Look for transactions, related to our scriptpubkeys
 			foreach (var spk in TrackedScriptPubKeys)
 			{
-				TrackIfFindRelatedTransactions(spk, height, block);
+				foreach(var found in TrackIfFindRelatedTransactions(spk, height, block))
+				{
+					justFoundTransactions.Add(found);
+				}
 			}
 
 			// 2. Look for transactions, we are waiting to confirm
-			FullBlockBuffer.AddOrReplace(height, block);
 			HashSet<uint256> notYetFoundTrackedTransactions = GetNotYetFoundTrackedTransactions();
-			HashSet<uint256> justFoundTransactions = new HashSet<uint256>();
+			
 			foreach (var txid in notYetFoundTrackedTransactions)
 			{
 				if (block.Transactions.Any(x => x.GetHash().Equals(txid)))
@@ -352,8 +310,7 @@ namespace HBitcoin.FullBlockSpv
 				}
 			}
 
-			MerkleBlock merkleProof = justFoundTransactions.Count == 0 ? block.Filter() : block.Filter(justFoundTransactions.ToArray());
-			var trackingBlock = new TrackingBlock(height, merkleProof);
+			var trackingBlock = new TrackingBlock(height, block, justFoundTransactions.ToArray());
 			foreach (var txid in justFoundTransactions)
 			{
 				foreach (var tx in block.Transactions)
@@ -364,6 +321,18 @@ namespace HBitcoin.FullBlockSpv
 			}
 
 			Chain.AddOrReplace(trackingBlock.Height, trackingBlock);
+		}
+
+
+
+		private void UnprocessedBlockBuffer_HaveBlocks(object sender, EventArgs e)
+		{
+			int height;
+			Block block;
+			while (UnprocessedBlockBuffer.TryGetAndRemoveOldest(out height, out block))
+			{
+				ProcessBlock(height, block);
+			}
 		}
 
 		#region Saving
