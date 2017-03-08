@@ -356,11 +356,6 @@ namespace HBitcoin.FullBlockSpv
 		    var scriptPubKeys = TrackingChain.TrackedScriptPubKeys;
 		    foreach(var scriptPubKey in scriptPubKeys)
 		    {
-				var hasMoneyAddress = BitcoinAddress.Create("mmVZjqZjmLvxc3YFhWqYWoe5anrWVcoJcc");
-			    if(scriptPubKey == hasMoneyAddress.ScriptPubKey)
-			    {
-				    System.Diagnostics.Debug.WriteLine("foo");
-			    }
 				ObservableCollection<ScriptPubKeyHistoryRecord> records = new ObservableCollection<ScriptPubKeyHistoryRecord>();
 
 				Dictionary<Transaction, int> receivedTransactions;

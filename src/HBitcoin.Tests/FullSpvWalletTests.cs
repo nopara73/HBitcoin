@@ -20,7 +20,7 @@ namespace HBitcoin.Tests
 		public void SycingTest()
 		{
 			// load wallet
-			Network network = Network.TestNet;
+			Network network = Network.Main;
 			string path = $"Wallets/Empty{network}.json";
 			const string password = "";
 			Safe safe;
@@ -65,7 +65,8 @@ namespace HBitcoin.Tests
 				var creationHeader = WalletJob.HeaderChain.GetBlock(WalletJob.CreationHeight);
 				Assert.True(creationHeader.Header.BlockTime >= Safe.EarliestPossibleCreationTime);
 			}
-			Assert.True(WalletJob.GetAllChainAndMemPoolTransactions().Count == 0);
+			var allTxCount = WalletJob.GetAllChainAndMemPoolTransactions().Count;
+			Assert.True(allTxCount == 0);
 			Assert.True(WalletJob.SafeHistory.Count == 0);
 			Assert.True(WalletJob.State == WalletState.NotStarted);
 			Assert.True(WalletJob.TracksDefaultSafe);
@@ -79,12 +80,12 @@ namespace HBitcoin.Tests
 			try
 			{
 				// wait until fully synced and connected
-				while(!fullyConnected)
+				while (!fullyConnected)
 				{
 					Task.Delay(10).Wait();
 				}
 
-				while(!synced)
+				while (!synced)
 				{
 					Task.Delay(1000).Wait();
 				}
@@ -92,7 +93,7 @@ namespace HBitcoin.Tests
 				Assert.True(WalletJob.State == WalletState.SyncingMempool);
 				Assert.True(WalletJob.CreationHeight != -1);
 				Assert.True(WalletJob.GetAllChainAndMemPoolTransactions().Count == 0);
-				foreach(var addrHistory in WalletJob.SafeHistory)
+				foreach (var addrHistory in WalletJob.SafeHistory)
 				{
 					Assert.True(addrHistory.Value.Count == 0);
 				}
