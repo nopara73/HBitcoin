@@ -660,6 +660,7 @@ namespace HBitcoin.FullBlockSpv
 				if (_connectionParameters != null)
 			    {
 				    var headerHeight = HeaderChain.Height;
+					if (_savedHeaderHeight == -1) _savedHeaderHeight = headerHeight;
 				    if(headerHeight > _savedHeaderHeight)
 				    {
 					    SaveHeaderChain();
@@ -674,6 +675,7 @@ namespace HBitcoin.FullBlockSpv
 		    }
 
 		    var trackingHeight = BestHeight;
+		    if(_savedTrackingHeight == -1) _savedTrackingHeight = trackingHeight;
 		    if(trackingHeight > _savedTrackingHeight)
 		    {
 			    await TrackingChain.SaveAsync(_trackingChainFolderPath).ConfigureAwait(false);
