@@ -66,28 +66,22 @@ namespace HBitcoin.KeyManagement
         public static Safe Load(string password, string walletFilePath)
         {
             if (!File.Exists(walletFilePath))
-                throw new ArgumentException($"No wallet file found at {walletFilePath}");
+                throw new FileNotFoundException($"No wallet file found at {walletFilePath}");
 
+            // deserialize the wallet
             var walletFileRawContent = WalletFileSerializer.Deserialize(walletFilePath);
-
-            var encryptedBitcoinPrivateKeyString = walletFileRawContent.EncryptedSeed;
-            var chainCodeString = walletFileRawContent.ChainCode;
-
-            var chainCode = Convert.FromBase64String(chainCodeString);
-
-            Network network;
-            var networkString = walletFileRawContent.Network;
-            network = networkString == Network.Main.ToString() ? Network.Main : Network.TestNet;
-
+            
+            var network = walletFileRawContent.Network == Network.Main.ToString() ? Network.Main : Network.TestNet;            
+            var privateKey = Key.Parse(walletFileRawContent.EncryptedSeed, password, network);
+            var chainCode = Convert.FromBase64String(walletFileRawContent.ChainCode);
+            var seedExtKey = new ExtKey(privateKey, chainCode);
             DateTimeOffset creationTime = DateTimeOffset.ParseExact(walletFileRawContent.CreationTime, "yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-            var safe = new Safe(password, walletFilePath, network, creationTime);
-
-            var privateKey = Key.Parse(encryptedBitcoinPrivateKeyString, password, safe.Network);
-            var seedExtKey = new ExtKey(privateKey, chainCode);
-            safe.SetSeed(seedExtKey);
-
-            return safe;
+            // initialize the safe
+            return new Safe(password, walletFilePath, network, creationTime)
+            {
+                ExtKey = seedExtKey
+            };
         }
 
         /// <summary>
@@ -141,9 +135,7 @@ namespace HBitcoin.KeyManagement
 
             return mnemonic;
         }
-
-        private void SetSeed(ExtKey seedExtKey) => ExtKey = seedExtKey;
-
+        
         private void Save(string password, string walletFilePath, Network network, DateTimeOffset creationTime)
         {
             if (File.Exists(walletFilePath))
