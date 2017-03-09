@@ -16,7 +16,7 @@ namespace HBitcoin.Tests
 		[Fact]
 		public void ObservableDictionaryTest()
 		{
-			ObservableDictionary<int, string> foo = new ObservableDictionary<int, string>();
+			ConcurrentObservableDictionary<int, string> foo = new ConcurrentObservableDictionary<int, string>();
 			foo.Add(1, "foo");
 
 			var times = 0;

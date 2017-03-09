@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using ConcurrentCollections;
 using NBitcoin;
 
 namespace HBitcoin.FullBlockSpv
@@ -9,7 +10,7 @@ namespace HBitcoin.FullBlockSpv
 	{
 		public int Height { get; private set; }
 		public MerkleBlock MerkleProof { get; private set; } = new MerkleBlock();
-		public HashSet<Transaction> TrackedTransactions { get; private set; } = new HashSet<Transaction>();
+		public ConcurrentHashSet<Transaction> TrackedTransactions { get; private set; } = new ConcurrentHashSet<Transaction>();
 
 		// random bytes to separate data, not very elegant
 		private static readonly byte[] txSep = new byte[] { 0x30, 0x15, 0x7A, 0x29, 0x5F, 0x1D, 0x7D };

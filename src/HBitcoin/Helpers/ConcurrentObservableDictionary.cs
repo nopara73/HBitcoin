@@ -1,4 +1,4 @@
-﻿//from https://github.com/brianchance/MonoTouchMVVMCrossValidationTester/blob/master/Validation.Core/ObservableDictionary.cs
+﻿//from https://github.com/brianchance/MonoTouchMVVMCrossValidationTester/blob/master/Validation.Core/ConcurrentObservableDictionary.cs
 //modified
 
 using System;
@@ -10,7 +10,7 @@ using System.Collections.Specialized;
 
 namespace System.Collections.ObjectModel
 {
-	public class ObservableDictionary<TKey, TValue> : IDictionary<TKey, TValue>, INotifyCollectionChanged, INotifyPropertyChanged
+	public class ConcurrentObservableDictionary<TKey, TValue> : IDictionary<TKey, TValue>, INotifyCollectionChanged, INotifyPropertyChanged
 	{
 		private const string CountString = "Count";
 		private const string IndexerName = "Item[]";
@@ -19,24 +19,24 @@ namespace System.Collections.ObjectModel
 
 		private readonly object Lock = new object();
 
-		protected ConcurrentDictionary<TKey, TValue> Dictionary { get; private set; }
+		protected ConcurrentDictionary<TKey, TValue> ConcurrentDictionary { get; private set; }
 
 		#region Constructors
-		public ObservableDictionary()
+		public ConcurrentObservableDictionary()
 		{
-			Dictionary = new ConcurrentDictionary<TKey, TValue>();
+			ConcurrentDictionary = new ConcurrentDictionary<TKey, TValue>();
 		}
-		public ObservableDictionary(ConcurrentDictionary<TKey, TValue> dictionary)
+		public ConcurrentObservableDictionary(ConcurrentDictionary<TKey, TValue> dictionary)
 		{
-			Dictionary = new ConcurrentDictionary<TKey, TValue>(dictionary);
+			ConcurrentDictionary = new ConcurrentDictionary<TKey, TValue>(dictionary);
 		}
-		public ObservableDictionary(IEqualityComparer<TKey> comparer)
+		public ConcurrentObservableDictionary(IEqualityComparer<TKey> comparer)
 		{
-			Dictionary = new ConcurrentDictionary<TKey, TValue>(comparer);
+			ConcurrentDictionary = new ConcurrentDictionary<TKey, TValue>(comparer);
 		}
-		public ObservableDictionary(IDictionary<TKey, TValue> dictionary, IEqualityComparer<TKey> comparer)
+		public ConcurrentObservableDictionary(IDictionary<TKey, TValue> dictionary, IEqualityComparer<TKey> comparer)
 		{
-			Dictionary = new ConcurrentDictionary<TKey, TValue>(dictionary, comparer);
+			ConcurrentDictionary = new ConcurrentDictionary<TKey, TValue>(dictionary, comparer);
 		}
 		#endregion
 
@@ -44,9 +44,9 @@ namespace System.Collections.ObjectModel
 
 		public void Add(TKey key, TValue value) => Insert(key, value, true);
 
-		public bool ContainsKey(TKey key) => Dictionary.ContainsKey(key);
+		public bool ContainsKey(TKey key) => ConcurrentDictionary.ContainsKey(key);
 
-		public ICollection<TKey> Keys => Dictionary.Keys;
+		public ICollection<TKey> Keys => ConcurrentDictionary.Keys;
 
 		public bool Remove(TKey key) => Remove(key, suppressNotifications: false);
 
@@ -55,15 +55,15 @@ namespace System.Collections.ObjectModel
 			lock(Lock)
 			{
 				TValue value;
-				var ret = Dictionary.TryRemove(key, out value);
+				var ret = ConcurrentDictionary.TryRemove(key, out value);
 				if(ret && !suppressNotifications) OnCollectionChanged();
 				return ret;
 			}
 		}
 
-		public bool TryGetValue(TKey key, out TValue value) => Dictionary.TryGetValue(key, out value);
+		public bool TryGetValue(TKey key, out TValue value) => ConcurrentDictionary.TryGetValue(key, out value);
 
-		public ICollection<TValue> Values => Dictionary.Values;
+		public ICollection<TValue> Values => ConcurrentDictionary.Values;
 
 		public TValue this[TKey key]
 		{
@@ -88,15 +88,15 @@ namespace System.Collections.ObjectModel
 		{
 			lock(Lock)
 			{
-				if (Dictionary.Count > 0)
+				if (ConcurrentDictionary.Count > 0)
 				{
-					Dictionary.Clear();
+					ConcurrentDictionary.Clear();
 					OnCollectionChanged();
 				}
 			}
 		}
 
-		public bool Contains(KeyValuePair<TKey, TValue> item) => Dictionary.Contains(item);
+		public bool Contains(KeyValuePair<TKey, TValue> item) => ConcurrentDictionary.Contains(item);
 
 		/// <summary>
 		/// NotImplementedException
@@ -116,7 +116,7 @@ namespace System.Collections.ObjectModel
 			get { throw new NotImplementedException(); }
 		}
 
-		public int Count => Dictionary.Count;
+		public int Count => ConcurrentDictionary.Count;
 
 		public bool Remove(KeyValuePair<TKey, TValue> item) => Remove(item.Key);
 
@@ -124,13 +124,13 @@ namespace System.Collections.ObjectModel
 
 		#region IEnumerable<KeyValuePair<TKey,TValue>> Members
 
-		public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator() => Dictionary.GetEnumerator();
+		public IEnumerator<KeyValuePair<TKey, TValue>> GetEnumerator() => ConcurrentDictionary.GetEnumerator();
 
 		#endregion
 
 		#region IEnumerable Members
 
-		IEnumerator IEnumerable.GetEnumerator() => ((IEnumerable)Dictionary).GetEnumerator();
+		IEnumerator IEnumerable.GetEnumerator() => ((IEnumerable)ConcurrentDictionary).GetEnumerator();
 
 		#endregion
 
@@ -175,18 +175,18 @@ namespace System.Collections.ObjectModel
 				if (key == null) throw new ArgumentNullException(nameof(key));
 
 				TValue item;
-				if (Dictionary.TryGetValue(key, out item))
+				if (ConcurrentDictionary.TryGetValue(key, out item))
 				{
 					if (add) throw new ArgumentException("An item with the same key has already been added.");
 					if (Equals(item, value)) return;
-					Dictionary[key] = value;
+					ConcurrentDictionary[key] = value;
 
 					OnCollectionChanged(NotifyCollectionChangedAction.Replace, new KeyValuePair<TKey, TValue>(key, value), new KeyValuePair<TKey, TValue>(key, item));
 					OnPropertyChanged(key.ToString());
 				}
 				else
 				{
-					Dictionary[key] = value;
+					ConcurrentDictionary[key] = value;
 
 					OnCollectionChanged(NotifyCollectionChangedAction.Add, new KeyValuePair<TKey, TValue>(key, value));
 					OnPropertyChanged(key.ToString());

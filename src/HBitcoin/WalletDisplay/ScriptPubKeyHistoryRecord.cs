@@ -37,11 +37,11 @@ namespace HBitcoin.WalletDisplay
 			get { return _amount; }
 			set { SetField(ref _amount, value); }
 		}
-		private bool _confirmed;
-		public bool Confirmed
+		private int _confirmation;
+		public int Confirmation
 		{
-			get { return _confirmed; }
-			set { SetField(ref _confirmed, value); }
+			get { return _confirmation; }
+			set { SetField(ref _confirmation, value); }
 		}
 		private uint256 _transactionId;
 		public uint256 TransactionId

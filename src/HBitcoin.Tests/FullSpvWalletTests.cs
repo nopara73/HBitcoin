@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -16,11 +17,13 @@ namespace HBitcoin.Tests
 {
 	public class FullSpvWalletTests
 	{
-		[Fact]
-		public void SycingTest()
+		[Theory]
+		[InlineData("TestNet")]
+		[InlineData("Main")]
+		public void SycingTest(string networkString)
 		{
 			// load wallet
-			Network network = Network.Main;
+			Network network = networkString == "TestNet"? Network.TestNet:Network.Main;
 			string path = $"Wallets/Empty{network}.json";
 			const string password = "";
 			Safe safe;
@@ -34,6 +37,8 @@ namespace HBitcoin.Tests
 				Mnemonic mnemonic;
 				safe = Safe.Create(out mnemonic, password, path, network);
 			}
+
+			System.Diagnostics.Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
 			WalletJob.Init(safe);
@@ -62,8 +67,9 @@ namespace HBitcoin.Tests
 			Assert.True(WalletJob.ConnectedNodeCount == 0);
 			if(WalletJob.CreationHeight != -1)
 			{
-				var creationHeader = WalletJob.HeaderChain.GetBlock(WalletJob.CreationHeight);
-				Assert.True(creationHeader.Header.BlockTime >= Safe.EarliestPossibleCreationTime);
+				ChainedBlock creationHeader;
+				if(WalletJob.TryGetHeader(WalletJob.CreationHeight, out creationHeader))
+					Assert.True(creationHeader.Header.BlockTime >= Safe.EarliestPossibleCreationTime);
 			}
 			var allTxCount = WalletJob.GetAllChainAndMemPoolTransactions().Count;
 			Assert.True(allTxCount == 0);
@@ -97,7 +103,9 @@ namespace HBitcoin.Tests
 				{
 					Assert.True(addrHistory.Value.Count == 0);
 				}
-				var expectedBlockCount = WalletJob.HeaderChain.Tip.Height - WalletJob.CreationHeight + 1;
+				int headerHeight;
+				Assert.True(WalletJob.TryGetHeaderHeight(out headerHeight));
+				var expectedBlockCount = headerHeight - WalletJob.CreationHeight + 1;
 				Assert.True(WalletJob.TrackingChain.BlockCount == expectedBlockCount);
 				Assert.True(WalletJob.TrackingChain.TrackedScriptPubKeys.Count > 0);
 				Assert.True(WalletJob.TrackingChain.TrackedTransactions.Count == 0);
@@ -115,27 +123,30 @@ namespace HBitcoin.Tests
 
 		private static async Task ReportAsync(CancellationToken ctsToken)
 		{
-			while(true)
+			while (true)
 			{
 				if (ctsToken.IsCancellationRequested) return;
 				try
 				{
 					await Task.Delay(1000, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
-					
-					// HEADERCHAIN
-					var currHeaderHeight = WalletJob.HeaderChain.Height;
-					if(currHeaderHeight > _prevHeaderHeight)
-					{
-						System.Diagnostics.Debug.WriteLine($"HeaderChain height: {currHeaderHeight}");
-						_prevHeaderHeight = currHeaderHeight;
-					}
 
-					// TRACKINGCHAIN
-					var currHeight = WalletJob.BestHeight;
-					if(currHeight > _prevHeight)
+					int currHeaderHeight;
+					if(WalletJob.TryGetHeaderHeight(out currHeaderHeight))
 					{
-						System.Diagnostics.Debug.WriteLine($"TrackingChain height: {currHeight}");
-						_prevHeight = currHeight;
+						// HEADERCHAIN
+						if (currHeaderHeight > _prevHeaderHeight)
+						{
+							System.Diagnostics.Debug.WriteLine($"HeaderChain height: {currHeaderHeight}");
+							_prevHeaderHeight = currHeaderHeight;
+						}
+
+						// TRACKINGCHAIN
+						var currHeight = WalletJob.BestHeight;
+						if (currHeight > _prevHeight)
+						{
+							System.Diagnostics.Debug.WriteLine($"TrackingChain height: {currHeight}");
+							_prevHeight = currHeight;
+						}
 					}
 				}
 				catch
@@ -154,6 +165,7 @@ namespace HBitcoin.Tests
 			const string password = "";
 			Safe safe = Safe.Load(password, path);
 			Assert.Equal(safe.Network, network);
+			System.Diagnostics.Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
 			WalletJob.Init(safe);
@@ -208,7 +220,7 @@ namespace HBitcoin.Tests
 					{
 						var record = scriptPubKey.Value.FirstOrDefault();
 
-						Assert.True(record.Confirmed);
+						Assert.True(record.Confirmation > 0);
 						Assert.True(record.Amount == new Money(0.1m, MoneyUnit.BTC));
 						DateTimeOffset expTime;
 						DateTimeOffset.TryParse("2017.03.06. 16:47:15 +00:00", out expTime);
@@ -218,6 +230,85 @@ namespace HBitcoin.Tests
 						break;
 					}
 				}
+			}
+			finally
+			{
+				cts.Cancel();
+				Task.WhenAll(reportTask, walletJobTask).Wait();
+			}
+		}
+
+		[Fact]
+		public void RealHistoryTest()
+		{
+			// load wallet
+			Network network = Network.TestNet;
+			string path = $"CommittedWallets/HiddenWallet.json";
+			const string password = "";
+			// I change it because I am using a very old wallet to test
+			Safe.EarliestPossibleCreationTime = DateTimeOffset.ParseExact("2016-12-18", "yyyy-MM-dd", CultureInfo.InvariantCulture);
+			Safe safe = Safe.Load(password, path);
+			Assert.Equal(safe.Network, network);
+			System.Diagnostics.Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
+
+			// create walletjob
+			WalletJob.Init(safe);
+			var synced = false;
+			// note some event
+			WalletJob.ConnectedNodeCountChanged += delegate
+			{
+				if (WalletJob.MaxConnectedNodeCount == WalletJob.ConnectedNodeCount)
+				{
+					System.Diagnostics.Debug.WriteLine(
+						$"{nameof(WalletJob.MaxConnectedNodeCount)} reached: {WalletJob.MaxConnectedNodeCount}");
+				}
+				else System.Diagnostics.Debug.WriteLine($"{nameof(WalletJob.ConnectedNodeCount)}: {WalletJob.ConnectedNodeCount}");
+			};
+			WalletJob.StateChanged += delegate
+			{
+				System.Diagnostics.Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
+				if (WalletJob.State == WalletState.SyncingMempool)
+				{
+					synced = true;
+				}
+			};
+
+			// start syncing
+			var cts = new CancellationTokenSource();
+			var walletJobTask = WalletJob.StartAsync(cts.Token);
+			Task reportTask = ReportAsync(cts.Token);
+
+			try
+			{
+				// wait until fully synced
+
+				while (!synced)
+				{
+					Task.Delay(1000).Wait();
+				}
+
+				System.Diagnostics.Debug.WriteLine("");
+				System.Diagnostics.Debug.WriteLine("---------------------------------------------------------------------------");
+				System.Diagnostics.Debug.WriteLine(@"Date			Amount		Confirmed	Transaction Id");
+				System.Diagnostics.Debug.WriteLine("---------------------------------------------------------------------------");
+				List<ScriptPubKeyHistoryRecord> records = new List<ScriptPubKeyHistoryRecord>();
+
+				foreach (KeyValuePair<Script, ObservableCollection<ScriptPubKeyHistoryRecord>> scriptPubKeyHistory in WalletJob.SafeHistory)
+				{
+					if (scriptPubKeyHistory.Value.Count > 0)
+					{
+						foreach(var record in scriptPubKeyHistory.Value)
+						{
+							records.Add(record);
+						}
+					}
+				}
+				foreach(var record in records.OrderBy(x => x.TimeStamp))
+				{
+					System.Diagnostics.Debug.WriteLine($@"{record.TimeStamp.DateTime}	{record.Amount}	{record.Confirmation > 0}		{record.TransactionId}");
+				}
+
+				System.Diagnostics.Debug.WriteLine("");
 			}
 			finally
 			{

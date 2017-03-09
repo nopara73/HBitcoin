@@ -3,15 +3,16 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using ConcurrentCollections;
 
 namespace HBitcoin.KeyManagement
 {
 	public class Safe
 	{
 		public Network Network { get; }
-		
-		public static DateTimeOffset EarliestPossibleCreationTime
-			=> DateTimeOffset.ParseExact("2017-02-19", "yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+		public static DateTimeOffset EarliestPossibleCreationTime { get; set; } = DateTimeOffset.ParseExact("2017-02-19", "yyyy-MM-dd", CultureInfo.InvariantCulture);
+
 		public DateTimeOffset CreationTime { get; }
 
 		public ExtKey ExtKey { get; private set; }
@@ -23,9 +24,9 @@ namespace HBitcoin.KeyManagement
 			return GetPrivateKey(index, hdPathType, account).ScriptPubKey.GetDestinationAddress(Network);
 		}
 
-		public HashSet<BitcoinAddress> GetFirstNAddresses(int addressCount, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null)
+		public ConcurrentHashSet<BitcoinAddress> GetFirstNAddresses(int addressCount, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null)
 		{
-			var addresses = new HashSet<BitcoinAddress>();
+			var addresses = new ConcurrentHashSet<BitcoinAddress>();
 
 			for (var i = 0; i < addressCount; i++)
 			{

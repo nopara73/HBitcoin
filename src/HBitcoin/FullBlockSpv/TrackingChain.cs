@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ConcurrentCollections;
 using NBitcoin;
 
 namespace HBitcoin.FullBlockSpv
@@ -15,7 +16,7 @@ namespace HBitcoin.FullBlockSpv
 		#region Members
 
 		public Network Network { get; private set; }
-		public ObservableDictionary<int, TrackingBlock> Chain { get; } = new ObservableDictionary<int, TrackingBlock>();
+		public ConcurrentObservableDictionary<int, TrackingBlock> Chain { get; } = new ConcurrentObservableDictionary<int, TrackingBlock>();
 
 	    /// <summary>
 	    /// 
@@ -24,11 +25,11 @@ namespace HBitcoin.FullBlockSpv
 	    /// <param name="receivedTransactions">int: block height</param>
 	    /// <param name="spentTransactions">int: block height</param>
 	    /// <returns></returns>
-	    public bool TryFindConfirmedTransactions(Script scriptPubKey, out Dictionary<Transaction, int> receivedTransactions, out Dictionary<Transaction, int> spentTransactions)
+	    public bool TryFindConfirmedTransactions(Script scriptPubKey, out ConcurrentDictionary<Transaction, int> receivedTransactions, out ConcurrentDictionary<Transaction, int> spentTransactions)
 	    {
 		    var found = false;
-		    receivedTransactions = new Dictionary<Transaction, int>();
-			spentTransactions = new Dictionary<Transaction, int>();
+		    receivedTransactions = new ConcurrentDictionary<Transaction, int>();
+			spentTransactions = new ConcurrentDictionary<Transaction, int>();
 
 			foreach (TrackingBlock block in Chain.Values)
 		    {
@@ -42,7 +43,7 @@ namespace HBitcoin.FullBlockSpv
 				    {
 					    if(output.ScriptPubKey.Equals(scriptPubKey))
 					    {
-							receivedTransactions.Add(tx, block.Height);
+							receivedTransactions.AddOrReplace(tx, block.Height);
 						    found = true;
 					    }
 				    }
@@ -63,7 +64,7 @@ namespace HBitcoin.FullBlockSpv
 					    {
 						    if(receivedTransactions.Keys.Select(x => x.GetHash()).Contains(input.PrevOut.Hash))
 						    {
-							    spentTransactions.Add(tx, block.Height);
+							    spentTransactions.AddOrReplace(tx, block.Height);
 							    found = true;
 						    }
 					    }
@@ -144,10 +145,10 @@ namespace HBitcoin.FullBlockSpv
 	    }
 
 	    /// <summary> int: block height, if tx is not found yet -1 </summary>
-		public ObservableDictionary<uint256, int> TrackedTransactions { get; }
-			= new ObservableDictionary<uint256, int>();
-		public HashSet<Script> TrackedScriptPubKeys { get; }
-			= new HashSet<Script>();
+		public ConcurrentObservableDictionary<uint256, int> TrackedTransactions { get; }
+			= new ConcurrentObservableDictionary<uint256, int>();
+		public ConcurrentHashSet<Script> TrackedScriptPubKeys { get; }
+			= new ConcurrentHashSet<Script>();
 
 	    public readonly UnprocessedBlockBuffer UnprocessedBlockBuffer = new UnprocessedBlockBuffer();
 
@@ -204,9 +205,9 @@ namespace HBitcoin.FullBlockSpv
 		/// <param name="height"></param>
 		/// <param name="block"></param>
 		/// <returns>empty collection if not found any</returns>
-		private HashSet<uint256> TrackIfFindRelatedTransactions(Script scriptPubKey, int height, Block block)
+		private ConcurrentHashSet<uint256> TrackIfFindRelatedTransactions(Script scriptPubKey, int height, Block block)
 		{
-			var found = new HashSet<uint256>();
+			var found = new ConcurrentHashSet<uint256>();
 			foreach (var tx in block.Transactions)
 			{
 				foreach (var output in tx.Outputs)
@@ -221,9 +222,9 @@ namespace HBitcoin.FullBlockSpv
 
 			return found;
 		}
-		private HashSet<uint256> GetNotYetFoundTrackedTransactions()
+		private ConcurrentHashSet<uint256> GetNotYetFoundTrackedTransactions()
 		{
-			var notFound = new HashSet<uint256>();
+			var notFound = new ConcurrentHashSet<uint256>();
 			foreach (var tx in TrackedTransactions)
 			{
 				if (tx.Value == -1)
@@ -266,7 +267,7 @@ namespace HBitcoin.FullBlockSpv
 
 	    private void ProcessBlock(int height, Block block)
 		{
-			HashSet<uint256> justFoundTransactions = new HashSet<uint256>();
+			ConcurrentHashSet<uint256> justFoundTransactions = new ConcurrentHashSet<uint256>();
 
 			// 1. Look for transactions, related to our scriptpubkeys
 			foreach (var spk in TrackedScriptPubKeys)
@@ -278,7 +279,7 @@ namespace HBitcoin.FullBlockSpv
 			}
 
 			// 2. Look for transactions, we are waiting to confirm
-			HashSet<uint256> notYetFoundTrackedTransactions = GetNotYetFoundTrackedTransactions();
+			ConcurrentHashSet<uint256> notYetFoundTrackedTransactions = GetNotYetFoundTrackedTransactions();
 			
 			foreach (var txid in notYetFoundTrackedTransactions)
 			{
@@ -370,14 +371,37 @@ namespace HBitcoin.FullBlockSpv
 
 				if (Chain.Count > 0)
 				{
-					byte[] toFile = Chain.Values.First().ToBytes();
-					foreach (var block in Chain.Values.Skip(1))
+					var path = Path.Combine(trackingChainFolderPath, TrackingChainFileName);
+
+					if(File.Exists(path))
 					{
-						toFile = toFile.Concat(blockSep).Concat(block.ToBytes()).ToArray();
+						const string backupName = TrackingChainFileName + "_backup";
+						var backupPath = Path.Combine(trackingChainFolderPath, backupName);
+						File.Copy(path, backupPath, overwrite: true);
+						File.Delete(path);
 					}
 
-					File.WriteAllBytes(Path.Combine(trackingChainFolderPath, TrackingChainFileName),
-						toFile);
+					using(FileStream stream = File.OpenWrite(path))
+					{
+						var toFile = Chain.Values.First().ToBytes();
+						await stream.WriteAsync(toFile, 0, toFile.Length).ConfigureAwait(false);
+						foreach(var block in Chain.Values.Skip(1))
+						{
+							await stream.WriteAsync(blockSep, 0, blockSep.Length).ConfigureAwait(false);
+							var blockBytes = block.ToBytes();
+							await stream.WriteAsync(blockBytes, 0, blockBytes.Length).ConfigureAwait(false);
+						}
+					}
+
+					//byte[] toFile = Chain.Values.First().ToBytes();
+					//foreach (var block in Chain.Values.Skip(1))
+					//{
+					//	toFile = toFile.Concat(blockSep).Concat(block.ToBytes()).ToArray();
+					//}
+
+					//var path = Path.Combine(trackingChainFolderPath, TrackingChainFileName);
+					//File.WriteAllBytes(path,
+					//	toFile);
 				}
 			}
 			finally

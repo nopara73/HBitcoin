@@ -12,7 +12,7 @@ namespace HBitcoin.FullBlockSpv
     {
 	    public const int Capacity = 50;
 		// int is the height
-		private readonly ObservableDictionary<int, Block> _blocks = new ObservableDictionary<int, Block>();
+		private readonly ConcurrentObservableDictionary<int, Block> _blocks = new ConcurrentObservableDictionary<int, Block>();
 
 		public event EventHandler HaveBlocks;
 		private void OnHaveBlocks() => HaveBlocks?.Invoke(this, EventArgs.Empty);

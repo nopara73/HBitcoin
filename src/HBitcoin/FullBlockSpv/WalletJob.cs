@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ConcurrentCollections;
 using HBitcoin.KeyManagement;
 using HBitcoin.MemPool;
 using HBitcoin.WalletDisplay;
@@ -19,7 +21,7 @@ namespace HBitcoin.FullBlockSpv
     {
 		public static Safe Safe { get; private set; }
 	    public static bool TracksDefaultSafe { get; private set; }
-		public static HashSet<SafeAccount> Accounts { get; private set; }
+		public static ConcurrentHashSet<SafeAccount> Accounts { get; private set; }
 
 	    private static int _CreationHeight = -1;
 		/// <summary>
@@ -112,7 +114,7 @@ namespace HBitcoin.FullBlockSpv
 	    public static NodesGroup Nodes { get; private set; }
 	    private static LookaheadBlockPuller BlockPuller;
 		
-		public static ObservableDictionary<Script, ObservableCollection<ScriptPubKeyHistoryRecord>> SafeHistory = new ObservableDictionary<Script, ObservableCollection<ScriptPubKeyHistoryRecord>>();
+		public static ConcurrentObservableDictionary<Script, ObservableCollection<ScriptPubKeyHistoryRecord>> SafeHistory = new ConcurrentObservableDictionary<Script, ObservableCollection<ScriptPubKeyHistoryRecord>>();
 		
 		private const string WorkFolderPath = "FullBlockSpvData";
 		private static string _addressManagerFilePath => Path.Combine(WorkFolderPath, $"AddressManager{Safe.Network}.dat");
@@ -172,7 +174,7 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-		public static ConcurrentChain HeaderChain
+		private static ConcurrentChain HeaderChain
 		{
 			get
 			{
@@ -211,9 +213,9 @@ namespace HBitcoin.FullBlockSpv
 		    Safe = safeToTrack;
 		    if(accountsToTrack == null || !accountsToTrack.Any())
 			{
-				Accounts = new HashSet<SafeAccount>();
+				Accounts = new ConcurrentHashSet<SafeAccount>();
 			}
-			else Accounts = new HashSet<SafeAccount>(accountsToTrack);
+			else Accounts = new ConcurrentHashSet<SafeAccount>(accountsToTrack);
 
 		    TracksDefaultSafe = trackDefaultSafe;
 
@@ -287,8 +289,6 @@ namespace HBitcoin.FullBlockSpv
 
 		public static async Task StartAsync(CancellationToken  ctsToken)
 		{
-			State = WalletState.SyncingBlocks;
-
 			Directory.CreateDirectory(WorkFolderPath);
 
 			TrackingChain.TrackedTransactions.CollectionChanged += delegate
@@ -296,14 +296,15 @@ namespace HBitcoin.FullBlockSpv
 				UpdateSafeTracking();
 				UpdateSafeHistory();
 			};
-			UpdateSafeTracking();
-			UpdateSafeHistory();
 
 			_connectionParameters = new NodeConnectionParameters();
 			//So we find nodes faster
 			_connectionParameters.TemplateBehaviors.Add(new AddressManagerBehavior(AddressManager));
 			//So we don't have to load the chain each time we start
 			_connectionParameters.TemplateBehaviors.Add(new ChainBehavior(HeaderChain));
+
+			UpdateSafeTracking();
+			UpdateSafeHistory();
 
 			Nodes = new NodesGroup(Safe.Network, _connectionParameters,
 				new NodeRequirement
@@ -335,19 +336,21 @@ namespace HBitcoin.FullBlockSpv
 
 			Nodes.ConnectedNodes.Removed += delegate { OnConnectedNodeCountChanged(); };
 			Nodes.ConnectedNodes.Added += delegate { OnConnectedNodeCountChanged(); };
+
 			Nodes.Connect();
-			
-		    var tasks = new HashSet<Task>
+
+			var tasks = new ConcurrentHashSet<Task>
 		    {
 			    PeriodicSaveAsync(TimeSpan.FromMinutes(3), ctsToken),
 				BlockPullerJobAsync(ctsToken),
 				MemPoolJob.StartAsync(ctsToken)
 			};
 
-		    await Task.WhenAll(tasks).ConfigureAwait(false);
+			State = WalletState.SyncingBlocks;
+			await Task.WhenAll(tasks).ConfigureAwait(false);
 
 		    State = WalletState.NotStarted;
-			await SaveAllAsync().ConfigureAwait(false);
+			await SaveAllChangedAsync().ConfigureAwait(false);
 			Nodes.Dispose();
 		}
 
@@ -358,8 +361,8 @@ namespace HBitcoin.FullBlockSpv
 		    {
 				ObservableCollection<ScriptPubKeyHistoryRecord> records = new ObservableCollection<ScriptPubKeyHistoryRecord>();
 
-				Dictionary<Transaction, int> receivedTransactions;
-				Dictionary<Transaction, int> spentTransactions;
+				ConcurrentDictionary<Transaction, int> receivedTransactions;
+				ConcurrentDictionary<Transaction, int> spentTransactions;
 
 			    if(TryFindAllChainAndMemPoolTransactions(scriptPubKey, out receivedTransactions, out spentTransactions))
 			    {
@@ -370,9 +373,11 @@ namespace HBitcoin.FullBlockSpv
 						record.Amount = Money.Zero; //for now
 
 					    record.TransactionId = tx.Key.GetHash();
-					    record.Confirmed = tx.Value != -1;
-					    if(!record.Confirmed)
+
+						if(tx.Value == -1) 
 					    {
+							record.Confirmation = 0;
+
 							var contains = false;
 							// if already contains, don't modify timestamp
 							if (SafeHistory.ContainsKey(scriptPubKey))
@@ -390,7 +395,8 @@ namespace HBitcoin.FullBlockSpv
 							if (contains == false) record.TimeStamp = DateTimeOffset.UtcNow;
 					    }
 					    else
-					    {
+						{
+							record.Confirmation = BestHeight - tx.Value + 1;
 							record.TimeStamp = HeaderChain.GetBlock(tx.Value).Header.BlockTime;
 					    }
 
@@ -407,8 +413,8 @@ namespace HBitcoin.FullBlockSpv
 						{
 							foreach(var input in tx.Key.Inputs)
 							{
-								var spent = spentTransactions.FirstOrDefault(x => x.Key.GetHash() == input.PrevOut.Hash).Key;
-								if(!spent.Equals(default(Transaction)))
+								Transaction spent = spentTransactions.FirstOrDefault(x => x.Key.GetHash() == input.PrevOut.Hash).Key;
+								if(default(Transaction) != spent)
 								{
 									var spentCoins = spent.Outputs.AsCoins();
 									foreach(var spentCoin in spentCoins)
@@ -437,11 +443,11 @@ namespace HBitcoin.FullBlockSpv
 	    /// <param name="receivedTransactions">int: block height</param>
 	    /// <param name="spentTransactions">int: block height</param>
 	    /// <returns></returns>
-	    public static bool TryFindAllChainAndMemPoolTransactions(Script scriptPubKey, out Dictionary<Transaction, int> receivedTransactions, out Dictionary<Transaction, int> spentTransactions)
+	    public static bool TryFindAllChainAndMemPoolTransactions(Script scriptPubKey, out ConcurrentDictionary<Transaction, int> receivedTransactions, out ConcurrentDictionary<Transaction, int> spentTransactions)
 	    {
 			var found = false;
-			receivedTransactions = new Dictionary<Transaction, int>();
-			spentTransactions = new Dictionary<Transaction, int>();
+			receivedTransactions = new ConcurrentDictionary<Transaction, int>();
+			spentTransactions = new ConcurrentDictionary<Transaction, int>();
 			
 			foreach (var tx in GetAllChainAndMemPoolTransactions())
 			{
@@ -453,7 +459,7 @@ namespace HBitcoin.FullBlockSpv
 				{
 					if (output.ScriptPubKey.Equals(scriptPubKey))
 					{
-						receivedTransactions.Add(tx.Key, tx.Value);
+						receivedTransactions.AddOrReplace(tx.Key, tx.Value);
 						found = true;
 					}
 				}
@@ -471,7 +477,7 @@ namespace HBitcoin.FullBlockSpv
 				    {
 					    if(receivedTransactions.Keys.Select(x => x.GetHash()).Contains(input.PrevOut.Hash))
 					    {
-						    spentTransactions.Add(tx.Key, tx.Value);
+						    spentTransactions.AddOrReplace(tx.Key, tx.Value);
 						    found = true;
 					    }
 				    }
@@ -485,9 +491,9 @@ namespace HBitcoin.FullBlockSpv
 		/// 
 		/// </summary>
 		/// <returns>int: block height, -1 if mempool</returns>
-		public static Dictionary<Transaction, int> GetAllChainAndMemPoolTransactions()
+		public static ConcurrentDictionary<Transaction, int> GetAllChainAndMemPoolTransactions()
 		{
-			var transactions = new Dictionary<Transaction, int>();
+			var transactions = new ConcurrentDictionary<Transaction, int>();
 
 			foreach (KeyValuePair<uint256, int> tx in TrackingChain.TrackedTransactions)
 			{
@@ -496,7 +502,7 @@ namespace HBitcoin.FullBlockSpv
 				{
 					if(TrackingChain.TryFindTransaction(tx.Key, tx.Value, out foundTransaction))
 					{
-						transactions.Add(foundTransaction, tx.Value);
+						transactions.AddOrReplace(foundTransaction, tx.Value);
 					}
 				}
 				else
@@ -505,7 +511,7 @@ namespace HBitcoin.FullBlockSpv
 					{
 						if (MemPoolJob.TryFindTransaction(tx.Key, out foundTransaction))
 						{
-							transactions.Add(foundTransaction, -1);
+							transactions.AddOrReplace(foundTransaction, -1);
 						}
 					}
 				}
@@ -517,8 +523,8 @@ namespace HBitcoin.FullBlockSpv
 		#region BlockPulling
 		private static async Task BlockPullerJobAsync(CancellationToken ctsToken)
 		{
-			int currTimeoutDownSec = 10;
-		    while(true)
+			const int currTimeoutDownSec = 360;
+			while(true)
 		    {
 			    try
 			    {
@@ -577,34 +583,23 @@ namespace HBitcoin.FullBlockSpv
 				    CancellationTokenSource ctsBlockDownload = CancellationTokenSource.CreateLinkedTokenSource(
 					    new CancellationTokenSource(TimeSpan.FromSeconds(currTimeoutDownSec)).Token,
 					    ctsToken);
-				    try
-				    {
-					    block = await Task.Run(()=>BlockPuller.NextBlock(ctsBlockDownload.Token)).ConfigureAwait(false);
+				    var blockDownloadTask = Task.Run(() => BlockPuller.NextBlock(ctsBlockDownload.Token));
+					block = await blockDownloadTask.ContinueWith(t =>
+					{
+						if (ctsToken.IsCancellationRequested) return null;
+						if (t.IsCanceled || t.IsFaulted)
+						{
+							Nodes.Purge("no reason");
+							System.Diagnostics.Debug.WriteLine(
+								$"Purging nodes, reason: couldn't download block in {nameof(currTimeoutDownSec)} seconds.");
+							return null;
+						}
+						return t.Result;
+					}).ConfigureAwait(false);
 
-				    }
-				    catch(OperationCanceledException)
-				    {
-					    if(ctsToken.IsCancellationRequested) return;
-
-					    // if the block takse more than 2min to download then something wrong purge
-					    const int maxSec = 180;
-					    if(currTimeoutDownSec > maxSec)
-					    {
-						    currTimeoutDownSec = 20;
-						    Nodes.Purge("no reason");
-						    System.Diagnostics.Debug.WriteLine($"Purging nodes, reason:{nameof(currTimeoutDownSec)} > {maxSec}");
-					    }
-					    else
-					    {
-						    currTimeoutDownSec = currTimeoutDownSec * 2; // adjust to the network speed
-						    System.Diagnostics.Debug.WriteLine(
-							    $"Adjusting network speed: {nameof(currTimeoutDownSec)} -> {currTimeoutDownSec}");
-					    }
-					    continue;
-				    }
-
-				    //reorg test
-				    //if(new Random().Next(100) >= 60) block = null;
+					if (ctsToken.IsCancellationRequested) return;
+					if (blockDownloadTask.IsCanceled || blockDownloadTask.IsFaulted)
+						continue;
 
 				    if(block == null) // then reorg happened
 				    {
@@ -621,7 +616,7 @@ namespace HBitcoin.FullBlockSpv
 					continue;
 			    }
 		    }
-	    }
+		}
 
 	    private static void Reorg()
 		{
@@ -635,30 +630,56 @@ namespace HBitcoin.FullBlockSpv
 		{
 			while (true)
 			{
-				if (ctsToken.IsCancellationRequested)
+				try
 				{
-					return;
-				}
-				await SaveAllAsync().ConfigureAwait(false);
-				await Task.Delay(delay, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
-			}
-		}
-		private static async Task SaveAllAsync()
-		{
-			await SemaphoreSave.WaitAsync().ConfigureAwait(false);
-			try
-			{
-				AddressManager.SavePeerFile(_addressManagerFilePath, Safe.Network);
-				SaveHeaderChain();
-			}
-			finally
-			{
-				SemaphoreSave.Release();
-			}
+					if (ctsToken.IsCancellationRequested) return;
 
-			await TrackingChain.SaveAsync(_trackingChainFolderPath).ConfigureAwait(false);
+					await SaveAllChangedAsync().ConfigureAwait(false);
+
+					await Task.Delay(delay, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+				}
+				catch(Exception ex)
+				{
+					System.Diagnostics.Debug.WriteLine("Periodic save failed, reason:");
+					System.Diagnostics.Debug.WriteLine(ex);
+				}
+			}
 		}
-		private static void SaveHeaderChain()
+
+	    private static int _savedHeaderHeight = -1;
+	    private static int _savedTrackingHeight = -1;
+
+	    private static async Task SaveAllChangedAsync()
+	    {
+		    await SemaphoreSave.WaitAsync().ConfigureAwait(false);
+			try
+		    {
+			    AddressManager.SavePeerFile(_addressManagerFilePath, Safe.Network);
+				System.Diagnostics.Debug.WriteLine($"Saved {nameof(AddressManager)}");
+
+				if (_connectionParameters != null)
+			    {
+				    var headerHeight = HeaderChain.Height;
+				    if(headerHeight > _savedHeaderHeight)
+				    {
+					    SaveHeaderChain(); System.Diagnostics.Debug.WriteLine($"Saved {nameof(HeaderChain)} at height: {headerHeight}");
+					}
+			    }
+		    }
+		    finally
+		    {
+			    SemaphoreSave.Release();
+		    }
+
+		    var trackingHeight = BestHeight;
+		    if(trackingHeight > _savedTrackingHeight)
+		    {
+			    await TrackingChain.SaveAsync(_trackingChainFolderPath).ConfigureAwait(false);
+				System.Diagnostics.Debug.WriteLine($"Saved {nameof(TrackingChain)} at height: {trackingHeight}");
+			}
+		}
+
+	    private static void SaveHeaderChain()
 		{
 			using (var fs = File.Open(_headerChainFilePath, FileMode.Create))
 			{
@@ -666,5 +687,25 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 		#endregion
-	}
+
+	    public static bool TryGetHeader(int height, out ChainedBlock creationHeader)
+	    {
+		    creationHeader = null;
+		    if(_connectionParameters == null)
+			    return false;
+
+			creationHeader = HeaderChain.GetBlock(height);
+			return true;
+		}
+
+	    public static bool TryGetHeaderHeight(out int height)
+	    {
+		    height = default(int);
+			if (_connectionParameters == null)
+				return false;
+
+		    height = HeaderChain.Height;
+			return true;
+	    }
+    }
 }

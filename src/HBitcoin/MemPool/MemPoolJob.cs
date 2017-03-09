@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ConcurrentCollections;
 using HBitcoin.FullBlockSpv;
 using NBitcoin;
 using NBitcoin.Protocol;
@@ -76,10 +77,11 @@ namespace HBitcoin.MemPool
 						await Task.Delay(100, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
 						continue;
 					}
+
 					State = MemPoolState.Syncing;
 
 					_confirmationHappening = false;
-					HashSet<Task> tasks = new HashSet<Task> {Task.CompletedTask};
+					ConcurrentHashSet<Task> tasks = new ConcurrentHashSet<Task> {Task.CompletedTask};
 					foreach(var node in WalletJob.Nodes.ConnectedNodes)
 					{
 						tasks.Add(FillTransactionsAsync(node, ctsToken));
@@ -206,10 +208,14 @@ namespace HBitcoin.MemPool
 			{
 				return;
 			}
-			catch(Exception e)
+			catch (InvalidOperationException)
+			{
+				return;
+			}
+			catch (Exception)
 			{
 				if (ctsToken.IsCancellationRequested) return;
-				if (e.Message.StartsWith("Invalid Node state", StringComparison.OrdinalIgnoreCase)) return;
+
 				throw;
 			}
 		}
