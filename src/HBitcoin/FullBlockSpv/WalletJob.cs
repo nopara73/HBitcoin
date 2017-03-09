@@ -662,8 +662,10 @@ namespace HBitcoin.FullBlockSpv
 				    var headerHeight = HeaderChain.Height;
 				    if(headerHeight > _savedHeaderHeight)
 				    {
-					    SaveHeaderChain(); System.Diagnostics.Debug.WriteLine($"Saved {nameof(HeaderChain)} at height: {headerHeight}");
-					}
+					    SaveHeaderChain();
+						System.Diagnostics.Debug.WriteLine($"Saved {nameof(HeaderChain)} at height: {headerHeight}");
+					    _savedHeaderHeight = headerHeight;
+				    }
 			    }
 		    }
 		    finally
@@ -676,7 +678,8 @@ namespace HBitcoin.FullBlockSpv
 		    {
 			    await TrackingChain.SaveAsync(_trackingChainFolderPath).ConfigureAwait(false);
 				System.Diagnostics.Debug.WriteLine($"Saved {nameof(TrackingChain)} at height: {trackingHeight}");
-			}
+			    _savedTrackingHeight = trackingHeight;
+		    }
 		}
 
 	    private static void SaveHeaderChain()
