@@ -212,13 +212,15 @@ namespace HBitcoin.Tests
 					}
 				}
 				System.Diagnostics.Debug.WriteLine($"First unused receive address: {firstReceive.ToWif()}");
-
 				var hasMoneyAddress = BitcoinAddress.Create("mmVZjqZjmLvxc3YFhWqYWoe5anrWVcoJcc");
+				Assert.True(firstReceive.ToWif() != hasMoneyAddress.ToWif());
+
 				foreach (KeyValuePair<Script, ObservableCollection<ScriptPubKeyHistoryRecord>> scriptPubKey in WalletJob.SafeHistory)
 				{
 					if (scriptPubKey.Key == hasMoneyAddress.ScriptPubKey)
 					{
 						var record = scriptPubKey.Value.FirstOrDefault();
+						Assert.True(record != default(ScriptPubKeyHistoryRecord));
 
 						Assert.True(record.Confirmation > 0);
 						Assert.True(record.Amount == new Money(0.1m, MoneyUnit.BTC));

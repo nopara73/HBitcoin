@@ -609,13 +609,12 @@ namespace HBitcoin.FullBlockSpv
 
 				    TrackingChain.AddOrReplaceBlock(chainedBlock.Height, block);
 			    }
-			    catch(Exception ex)
-			    {
-					System.Diagnostics.Debug.WriteLine("Block pulling unhandled exception:");
+				catch (Exception ex)
+				{
+					System.Diagnostics.Debug.WriteLine($"Ignoring {nameof(BlockPullerJobAsync)} exception:");
 					System.Diagnostics.Debug.WriteLine(ex);
-					continue;
-			    }
-		    }
+				}
+			}
 		}
 
 	    private static void Reorg()
@@ -640,7 +639,7 @@ namespace HBitcoin.FullBlockSpv
 				}
 				catch(Exception ex)
 				{
-					System.Diagnostics.Debug.WriteLine("Periodic save failed, reason:");
+					System.Diagnostics.Debug.WriteLine($"Ignoring {nameof(PeriodicSaveAsync)} exception:");
 					System.Diagnostics.Debug.WriteLine(ex);
 				}
 			}
@@ -696,21 +695,35 @@ namespace HBitcoin.FullBlockSpv
 	    public static bool TryGetHeader(int height, out ChainedBlock creationHeader)
 	    {
 		    creationHeader = null;
-		    if(_connectionParameters == null)
-			    return false;
+		    try
+		    {
+			    if(_connectionParameters == null)
+				    return false;
 
-			creationHeader = HeaderChain.GetBlock(height);
-			return true;
-		}
+			    creationHeader = HeaderChain.GetBlock(height);
+			    return true;
+		    }
+		    catch
+		    {
+				return false;
+		    }
+	    }
 
 	    public static bool TryGetHeaderHeight(out int height)
 	    {
 		    height = default(int);
-			if (_connectionParameters == null)
-				return false;
+		    try
+		    {
+			    if(_connectionParameters == null)
+				    return false;
 
-		    height = HeaderChain.Height;
-			return true;
+			    height = HeaderChain.Height;
+			    return true;
+		    }
+		    catch
+		    {
+				return false;
+		    }
 	    }
     }
 }

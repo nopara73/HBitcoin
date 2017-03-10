@@ -93,7 +93,7 @@ namespace HBitcoin.MemPool
 				}
 				catch(Exception ex)
 				{
-					System.Diagnostics.Debug.WriteLine("Ignoring MemPool exception:");
+					System.Diagnostics.Debug.WriteLine($"Ignoring {nameof(MemPoolJob)} exception:");
 					System.Diagnostics.Debug.WriteLine(ex);
 				}
 			}
