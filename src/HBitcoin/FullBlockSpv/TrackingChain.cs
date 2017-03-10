@@ -144,7 +144,7 @@ namespace HBitcoin.FullBlockSpv
 			return false;
 	    }
 
-	    /// <summary> int: block height, if tx is not found yet -1 </summary>
+	    /// <summary> int: block height, if tx is not in blockchain yet -1 </summary>
 		public ConcurrentObservableDictionary<uint256, int> TrackedTransactions { get; }
 			= new ConcurrentObservableDictionary<uint256, int>();
 		public ConcurrentHashSet<Script> TrackedScriptPubKeys { get; }
