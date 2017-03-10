@@ -20,24 +20,13 @@ namespace HBitcoin.Tests
 		[Theory]
 		[InlineData("TestNet")]
 		[InlineData("Main")]
-		public void SycingTest(string networkString)
+		public void SyncingTest(string networkString)
 		{
-			// load wallet
-			Network network = networkString == "TestNet"? Network.TestNet:Network.Main;
-			string path = $"Wallets/Empty{network}.json";
-			const string password = "";
-			Safe safe;
-			if(File.Exists(path))
-			{
-				safe = Safe.Load(password, path);
-				Assert.Equal(safe.Network, network);
-			}
-			else
-			{
-				Mnemonic mnemonic;
-				safe = Safe.Create(out mnemonic, password, path, network);
-			}
-
+            // load wallet
+            Network network = networkString == "TestNet" ? Network.TestNet : Network.Main;
+            Safe safe = Safe.Load(string.Empty, $"../../Wallets/Empty{network}.json");
+            Assert.Equal(network, safe.Network);
+            
 			System.Diagnostics.Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
@@ -158,14 +147,13 @@ namespace HBitcoin.Tests
 		
 		[Fact]
 		public void HaveFundsTest()
-		{
-			// load wallet
-			Network network = Network.TestNet;
-			string path = $"CommittedWallets/HaveFunds{network}.json";
-			const string password = "";
-			Safe safe = Safe.Load(password, path);
-			Assert.Equal(safe.Network, network);
-			System.Diagnostics.Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
+		{		
+            // load wallet
+            Network network = Network.TestNet;
+            Safe safe = Safe.Load(string.Empty, $"../../CommittedWallets/HaveFunds{network}.json");
+            Assert.Equal(network, safe.Network);
+
+            System.Diagnostics.Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
 			WalletJob.Init(safe);
@@ -241,14 +229,12 @@ namespace HBitcoin.Tests
 		[Fact]
 		public void RealHistoryTest()
 		{
-			// load wallet
-			Network network = Network.TestNet;
-			string path = $"CommittedWallets/HiddenWallet.json";
-			const string password = "";
-			// I change it because I am using a very old wallet to test
+            Network network = Network.TestNet;
+            
+            // I change it because I am using a very old wallet to test
 			Safe.EarliestPossibleCreationTime = DateTimeOffset.ParseExact("2016-12-18", "yyyy-MM-dd", CultureInfo.InvariantCulture);
-			Safe safe = Safe.Load(password, path);
-			Assert.Equal(safe.Network, network);
+            Safe safe = Safe.Load(string.Empty, $"../../CommittedWallets/HiddenWallet.json");
+            Assert.Equal(network, safe.Network);
 			System.Diagnostics.Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
