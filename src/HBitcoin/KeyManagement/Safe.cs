@@ -7,214 +7,207 @@ using ConcurrentCollections;
 
 namespace HBitcoin.KeyManagement
 {
-	public class Safe
-	{
-		public Network Network { get; }
+    public class Safe
+    {
+        public Network Network { get; }
 
-		public static DateTimeOffset EarliestPossibleCreationTime { get; set; } = DateTimeOffset.ParseExact("2017-02-19", "yyyy-MM-dd", CultureInfo.InvariantCulture);
+        public static DateTimeOffset EarliestPossibleCreationTime { get; set; } = DateTimeOffset.ParseExact("2017-02-19", "yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-		public DateTimeOffset CreationTime { get; }
+        public DateTimeOffset CreationTime { get; }
 
-		public ExtKey ExtKey { get; private set; }
-		public BitcoinExtPubKey BitcoinExtPubKey => ExtKey.Neuter().GetWif(Network);
-		public BitcoinExtKey BitcoinExtKey => ExtKey.GetWif(Network);
+        public ExtKey ExtKey { get; private set; }
 
-		public BitcoinAddress GetAddress(int index, HdPathType hdPathType = HdPathType.Receive, SafeAccount account  = null)
-		{
-			return GetPrivateKey(index, hdPathType, account).ScriptPubKey.GetDestinationAddress(Network);
-		}
+        public BitcoinExtPubKey BitcoinExtPubKey => ExtKey.Neuter().GetWif(Network);
 
-		public ConcurrentHashSet<BitcoinAddress> GetFirstNAddresses(int addressCount, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null)
-		{
-			var addresses = new ConcurrentHashSet<BitcoinAddress>();
+        public BitcoinExtKey BitcoinExtKey => ExtKey.GetWif(Network);
 
-			for (var i = 0; i < addressCount; i++)
-			{
-				addresses.Add(GetAddress(i, hdPathType, account));
-			}
+        public string WalletFilePath { get; }
 
-			return addresses;
-		}
+        protected Safe(string password, string walletFilePath, Network network, DateTimeOffset creationTime, Mnemonic mnemonic = null)
+        {
+            Network = network;
+            WalletFilePath = walletFilePath;
+            CreationTime = creationTime > EarliestPossibleCreationTime ? creationTime : EarliestPossibleCreationTime;
 
-		// Let's generate a unique id from seedpublickey
-		// Let's get the pubkey, so the chaincode is lost
-		// Let's get the address, you can't directly access it from the safe
-		// Also nobody would ever use this address for anythin
-		/// <summary> If the wallet only differs by CreationTime, the UniqueId will be the same </summary>
-		public string UniqueId => BitcoinExtPubKey.ExtPubKey.PubKey.GetAddress(Network).ToWif();
-		
-		public string WalletFilePath { get; }
+            if (mnemonic != null)
+            {
+                SetSeed(password, mnemonic);
+            }
+        }
 
-		protected Safe(string password, string walletFilePath, Network network, DateTimeOffset creationTime, Mnemonic mnemonic = null)
-		{
-			Network = network;
-			WalletFilePath = walletFilePath;
-			CreationTime = creationTime > EarliestPossibleCreationTime ? creationTime : EarliestPossibleCreationTime;
 
-			if (mnemonic != null)
-			{
-				SetSeed(password, mnemonic);
-			}
+        /// <summary>
+        ///     Creates a mnemonic, a seed, encrypts it and stores in the specified path.
+        /// </summary>
+        /// <param name="mnemonic">empty</param>
+        /// <param name="password"></param>
+        /// <param name="walletFilePath"></param>
+        /// <param name="network"></param>
+        /// <returns>Safe</returns>
+        public static Safe Create(out Mnemonic mnemonic, string password, string walletFilePath, Network network)
+        {
+            var creationTime = new DateTimeOffset(DateTimeOffset.UtcNow.Date);
 
-		}
+            var safe = new Safe(password, walletFilePath, network, creationTime);
 
-		public Safe(Safe safe)
-		{
-			Network = safe.Network;
-			CreationTime = safe.CreationTime;
-			ExtKey = safe.ExtKey;
-			WalletFilePath = safe.WalletFilePath;
-		}
+            mnemonic = safe.SetSeed(password);
 
-		/// <summary>
-		///     Creates a mnemonic, a seed, encrypts it and stores in the specified path.
-		/// </summary>
-		/// <param name="mnemonic">empty</param>
-		/// <param name="password"></param>
-		/// <param name="walletFilePath"></param>
-		/// <param name="network"></param>
-		/// <returns>Safe</returns>
-		public static Safe Create(out Mnemonic mnemonic, string password, string walletFilePath, Network network)
-		{
-			var creationTime = new DateTimeOffset(DateTimeOffset.UtcNow.Date);
+            safe.Save(password, walletFilePath, network, creationTime);
 
-			var safe = new Safe(password, walletFilePath, network, creationTime);
+            return safe;
+        }
 
-			mnemonic = safe.SetSeed(password);
+        public static Safe Load(string password, string walletFilePath)
+        {
+            if (!File.Exists(walletFilePath))
+                throw new ArgumentException($"No wallet file found at {walletFilePath}");
 
-			safe.Save(password, walletFilePath, network, creationTime);
+            var walletFileRawContent = WalletFileSerializer.Deserialize(walletFilePath);
 
-			return safe;
-		}
+            var encryptedBitcoinPrivateKeyString = walletFileRawContent.EncryptedSeed;
+            var chainCodeString = walletFileRawContent.ChainCode;
 
-		/// <summary>
-		/// 
-		/// </summary>
-		/// <param name="mnemonic"></param>
-		/// <param name="password"></param>
-		/// <param name="walletFilePath"></param>
-		/// <param name="network"></param>
-		/// <param name="creationTime">if null then will default to EarliestPossibleCreationTime</param>
-		/// <returns></returns>
-		public static Safe Recover(Mnemonic mnemonic, string password, string walletFilePath, Network network, DateTimeOffset? creationTime = null)
-		{
-			if(creationTime == null)
-				creationTime = EarliestPossibleCreationTime;
+            var chainCode = Convert.FromBase64String(chainCodeString);
 
-			var safe = new Safe(password, walletFilePath, network, (DateTimeOffset)creationTime, mnemonic);
-			safe.Save(password, walletFilePath, network, safe.CreationTime);
-			return safe;
-		}
+            Network network;
+            var networkString = walletFileRawContent.Network;
+            network = networkString == Network.Main.ToString() ? Network.Main : Network.TestNet;
 
-		private Mnemonic SetSeed(string password, Mnemonic mnemonic = null)
-		{
-			mnemonic = mnemonic ?? new Mnemonic(Wordlist.English, WordCount.Twelve);
+            DateTimeOffset creationTime = DateTimeOffset.ParseExact(walletFileRawContent.CreationTime, "yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-			ExtKey = mnemonic.DeriveExtKey(password);
+            var safe = new Safe(password, walletFilePath, network, creationTime);
 
-			return mnemonic;
-		}
+            var privateKey = Key.Parse(encryptedBitcoinPrivateKeyString, password, safe.Network);
+            var seedExtKey = new ExtKey(privateKey, chainCode);
+            safe.SetSeed(seedExtKey);
 
-		private void SetSeed(ExtKey seedExtKey) => ExtKey = seedExtKey;
+            return safe;
+        }
 
-		private void Save(string password, string walletFilePath, Network network, DateTimeOffset creationTime)
-		{
-			if (File.Exists(walletFilePath))
-				throw new NotSupportedException($"Wallet already exists at {walletFilePath}");
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="mnemonic"></param>
+        /// <param name="password"></param>
+        /// <param name="walletFilePath"></param>
+        /// <param name="network"></param>
+        /// <param name="creationTime">if null then will default to EarliestPossibleCreationTime</param>
+        /// <returns></returns>
+        public static Safe Recover(Mnemonic mnemonic, string password, string walletFilePath, Network network, DateTimeOffset? creationTime = null)
+        {
+            if (creationTime == null)
+                creationTime = EarliestPossibleCreationTime;
 
-			var directoryPath = Path.GetDirectoryName(Path.GetFullPath(walletFilePath));
-			if (directoryPath != null) Directory.CreateDirectory(directoryPath);
+            var safe = new Safe(password, walletFilePath, network, (DateTimeOffset)creationTime, mnemonic);
+            safe.Save(password, walletFilePath, network, safe.CreationTime);
+            return safe;
+        }
 
-			var privateKey = ExtKey.PrivateKey;
-			var chainCode = ExtKey.ChainCode;
+        public BitcoinAddress GetAddress(int index, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null)
+        {
+            return GetPrivateKey(index, hdPathType, account).ScriptPubKey.GetDestinationAddress(Network);
+        }
 
-			var encryptedBitcoinPrivateKeyString = privateKey.GetEncryptedBitcoinSecret(password, Network).ToWif();
-			var chainCodeString = Convert.ToBase64String(chainCode);
+        public ConcurrentHashSet<BitcoinAddress> GetFirstNAddresses(int addressCount, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null)
+        {
+            var addresses = new ConcurrentHashSet<BitcoinAddress>();
 
-			var networkString = network.ToString();
+            for (var i = 0; i < addressCount; i++)
+            {
+                addresses.Add(GetAddress(i, hdPathType, account));
+            }
 
-			var creationTimeString = creationTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            return addresses;
+        }
 
-			WalletFileSerializer.Serialize(
-				walletFilePath,
-				encryptedBitcoinPrivateKeyString,
-				chainCodeString,
-				networkString,
-				creationTimeString);
-		}
+        // Let's generate a unique id from seedpublickey
+        // Let's get the pubkey, so the chaincode is lost
+        // Let's get the address, you can't directly access it from the safe
+        // Also nobody would ever use this address for anythin
+        /// <summary> If the wallet only differs by CreationTime, the UniqueId will be the same </summary>
+        public string UniqueId => BitcoinExtPubKey.ExtPubKey.PubKey.GetAddress(Network).ToWif();
+      
+        private Mnemonic SetSeed(string password, Mnemonic mnemonic = null)
+        {
+            mnemonic = mnemonic ?? new Mnemonic(Wordlist.English, WordCount.Twelve);
 
-		public static Safe Load(string password, string walletFilePath)
-		{
-			if (!File.Exists(walletFilePath))
-				throw new ArgumentException($"No wallet file found at {walletFilePath}");
+            ExtKey = mnemonic.DeriveExtKey(password);
 
-			var walletFileRawContent = WalletFileSerializer.Deserialize(walletFilePath);
+            return mnemonic;
+        }
 
-			var encryptedBitcoinPrivateKeyString = walletFileRawContent.EncryptedSeed;
-			var chainCodeString = walletFileRawContent.ChainCode;
+        private void SetSeed(ExtKey seedExtKey) => ExtKey = seedExtKey;
 
-			var chainCode = Convert.FromBase64String(chainCodeString);
+        private void Save(string password, string walletFilePath, Network network, DateTimeOffset creationTime)
+        {
+            if (File.Exists(walletFilePath))
+                throw new NotSupportedException($"Wallet already exists at {walletFilePath}");
 
-			Network network;
-			var networkString = walletFileRawContent.Network;
-			network = networkString == Network.Main.ToString() ? Network.Main : Network.TestNet;
+            var directoryPath = Path.GetDirectoryName(Path.GetFullPath(walletFilePath));
+            if (directoryPath != null) Directory.CreateDirectory(directoryPath);
 
-			DateTimeOffset creationTime = DateTimeOffset.ParseExact(walletFileRawContent.CreationTime, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var privateKey = ExtKey.PrivateKey;
+            var chainCode = ExtKey.ChainCode;
 
-			var safe = new Safe(password, walletFilePath, network, creationTime);
+            var encryptedBitcoinPrivateKeyString = privateKey.GetEncryptedBitcoinSecret(password, Network).ToWif();
+            var chainCodeString = Convert.ToBase64String(chainCode);
 
-			var privateKey = Key.Parse(encryptedBitcoinPrivateKeyString, password, safe.Network);
-			var seedExtKey = new ExtKey(privateKey, chainCode);
-			safe.SetSeed(seedExtKey);
+            var networkString = network.ToString();
 
-			return safe;
-		}
+            var creationTimeString = creationTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
-		public BitcoinExtKey FindPrivateKey(BitcoinAddress address, int stopSearchAfterIteration = 100000, SafeAccount account = null)
-		{
-			for (int i = 0; i < stopSearchAfterIteration; i++)
-			{
-				if (GetAddress(i, HdPathType.Receive, account) == address)
-					return GetPrivateKey(i, HdPathType.Receive, account);
-				if (GetAddress(i, HdPathType.Change, account) == address)
-					return GetPrivateKey(i, HdPathType.Change, account);
-				if (GetAddress(i, HdPathType.NonHardened, account) == address)
-					return GetPrivateKey(i, HdPathType.NonHardened, account);
-			}
+            WalletFileSerializer.Serialize(
+                walletFilePath,
+                encryptedBitcoinPrivateKeyString,
+                chainCodeString,
+                networkString,
+                creationTimeString);
+        }
+        
+        public BitcoinExtKey FindPrivateKey(BitcoinAddress address, int stopSearchAfterIteration = 100000, SafeAccount account = null)
+        {
+            for (int i = 0; i < stopSearchAfterIteration; i++)
+            {
+                if (GetAddress(i, HdPathType.Receive, account) == address)
+                    return GetPrivateKey(i, HdPathType.Receive, account);
+                if (GetAddress(i, HdPathType.Change, account) == address)
+                    return GetPrivateKey(i, HdPathType.Change, account);
+                if (GetAddress(i, HdPathType.NonHardened, account) == address)
+                    return GetPrivateKey(i, HdPathType.NonHardened, account);
+            }
 
-			throw new KeyNotFoundException(address.ToWif());
-		}
+            throw new KeyNotFoundException(address.ToWif());
+        }
 
-		public BitcoinExtKey GetPrivateKey(int index, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null)
-		{
-			string firstPart = "";
-			if(account != null)
-			{
-				firstPart += Hierarchy.GetPathString(account) + "/";
-			}
+        public BitcoinExtKey GetPrivateKey(int index, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null)
+        {
+            string firstPart = "";
+            if (account != null)
+            {
+                firstPart += Hierarchy.GetPathString(account) + "/";
+            }
 
-			firstPart += Hierarchy.GetPathString(hdPathType);
-			string lastPart;
-			if(hdPathType == HdPathType.NonHardened)
-			{
-				lastPart = $"/{index}";
-			}
-			else lastPart = $"/{index}'";
+            firstPart += Hierarchy.GetPathString(hdPathType);
+            string lastPart;
+            if (hdPathType == HdPathType.NonHardened)
+            {
+                lastPart = $"/{index}";
+            }
+            else lastPart = $"/{index}'";
 
-			KeyPath keyPath = new KeyPath(firstPart + lastPart);
+            KeyPath keyPath = new KeyPath(firstPart + lastPart);
 
-			return ExtKey.Derive(keyPath).GetWif(Network);
-		}
+            return ExtKey.Derive(keyPath).GetWif(Network);
+        }
 
-		public string GetCreationTimeString()
-		{
-			return CreationTime.ToString("s", CultureInfo.InvariantCulture);
-		}
+        public string GetCreationTimeString()
+        {
+            return CreationTime.ToString("s", CultureInfo.InvariantCulture);
+        }
 
-		public void Delete()
-		{
-			if(File.Exists(WalletFilePath))
-				File.Delete(WalletFilePath);
-		}
-	}
+        public void Delete()
+        {
+            File.Delete(WalletFilePath);
+        }
+    }
 }
