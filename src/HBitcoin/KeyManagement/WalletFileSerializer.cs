@@ -42,10 +42,7 @@ namespace HBitcoin.KeyManagement
 				throw new FileNotFoundException($"Wallet not found at {path}");
 
 			var contentString = File.ReadAllText(path);
-			var walletFileSerializer = JsonConvert.DeserializeObject<WalletFileSerializer>(contentString);
-
-			return new WalletFileSerializer(walletFileSerializer.EncryptedSeed, walletFileSerializer.ChainCode,
-				walletFileSerializer.Network, walletFileSerializer.CreationTime);
+			return JsonConvert.DeserializeObject<WalletFileSerializer>(contentString);            
 		}
 	}
 }
