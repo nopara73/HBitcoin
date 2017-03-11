@@ -16,7 +16,7 @@ namespace HBitcoin.FullBlockSpv
 		#region Members
 
 		public Network Network { get; private set; }
-		public ConcurrentObservableDictionary<int, TrackingBlock> Chain { get; } = new ConcurrentObservableDictionary<int, TrackingBlock>();
+		public ConcurrentHashSet<SmartMerkleBlock> MerkleChain { get; } = new ConcurrentHashSet<SmartMerkleBlock>();
 
 	    /// <summary>
 	    /// 
@@ -25,48 +25,42 @@ namespace HBitcoin.FullBlockSpv
 	    /// <param name="receivedTransactions">int: block height</param>
 	    /// <param name="spentTransactions">int: block height</param>
 	    /// <returns></returns>
-	    public bool TryFindConfirmedTransactions(Script scriptPubKey, out ConcurrentDictionary<Transaction, int> receivedTransactions, out ConcurrentDictionary<Transaction, int> spentTransactions)
+	    public bool TryFindConfirmedTransactions(Script scriptPubKey, out ConcurrentHashSet<SmartTransaction> receivedTransactions, out ConcurrentHashSet<SmartTransaction> spentTransactions)
 	    {
 		    var found = false;
-		    receivedTransactions = new ConcurrentDictionary<Transaction, int>();
-			spentTransactions = new ConcurrentDictionary<Transaction, int>();
+		    receivedTransactions = new ConcurrentHashSet<SmartTransaction>();
+			spentTransactions = new ConcurrentHashSet<SmartTransaction>();
+			
+			foreach(var tx in TrackedTransactions.Where(x=>x.Confirmed))
+			{
+				// if already has that tx continue
+				if(receivedTransactions.Any(x => x.GetHash() == tx.GetHash()))
+					continue;
 
-			foreach (TrackingBlock block in Chain.Values)
-		    {
-			    foreach(var tx in block.TrackedTransactions)
-			    {
-					// if already has that tx continue
-					if(receivedTransactions.Keys.Any(x => x.GetHash() == tx.GetHash()))
-						continue;
-
-					foreach(var output in tx.Outputs)
-				    {
-					    if(output.ScriptPubKey.Equals(scriptPubKey))
-					    {
-							receivedTransactions.AddOrReplace(tx, block.Height);
-						    found = true;
-					    }
-				    }
-			    }
-		    }
+				foreach(var output in tx.Transaction.Outputs)
+				{
+					if(output.ScriptPubKey.Equals(scriptPubKey))
+					{
+						receivedTransactions.Add(tx);
+						found = true;
+					}
+				}
+			}
 
 		    if(found)
 		    {
-			    foreach(TrackingBlock block in Chain.Values)
+			    foreach(var tx in TrackedTransactions.Where(x => x.Confirmed))
 			    {
-				    foreach(var tx in block.TrackedTransactions)
-				    {
-					    // if already has that tx continue
-					    if(spentTransactions.Keys.Any(x => x.GetHash() == tx.GetHash()))
-						    continue;
+				    // if already has that tx continue
+				    if(spentTransactions.Any(x => x.GetHash() == tx.GetHash()))
+					    continue;
 
-					    foreach(var input in tx.Inputs)
+				    foreach(var input in tx.Transaction.Inputs)
+				    {
+					    if(receivedTransactions.Select(x => x.GetHash()).Contains(input.PrevOut.Hash))
 					    {
-						    if(receivedTransactions.Keys.Select(x => x.GetHash()).Contains(input.PrevOut.Hash))
-						    {
-							    spentTransactions.AddOrReplace(tx, block.Height);
-							    found = true;
-						    }
+						    spentTransactions.Add(tx);
+						    found = true;
 					    }
 				    }
 			    }
@@ -82,79 +76,27 @@ namespace HBitcoin.FullBlockSpv
 		/// <returns>if haven't got any fund yet</returns>
 		public bool IsClean(Script scriptPubKey)
 		{
-			foreach (TrackingBlock block in Chain.Values)
+			foreach(var tx in TrackedTransactions.Where(x => x.Confirmed))
 			{
-				foreach (var tx in block.TrackedTransactions)
+				if(tx.Transaction.Outputs.Any(output => output.ScriptPubKey.Equals(scriptPubKey)))
 				{
-					if(tx.Outputs.Any(output => output.ScriptPubKey.Equals(scriptPubKey)))
-					{
-						return false;
-					}
+					return false;
 				}
 			}
 
 			return true;
 		}
 
-		/// <summary>
-		/// 
-		/// </summary>
-		/// <param name="transactionId"></param>
-		/// <param name="transaction">int: block height</param>
-		/// <returns></returns>
-		public bool TryFindTransaction(uint256 transactionId, out Tuple<Transaction, int> transaction)
-		{
-			transaction = null;
-
-			foreach (TrackingBlock block in Chain.Values)
-			{
-				Transaction awaitedTransaction;
-				if(TryFindTransaction(transactionId, block.Height, out awaitedTransaction))
-				{
-					transaction = new Tuple<Transaction, int>(awaitedTransaction, block.Height);
-					return true;
-				}
-			}
-
-			return false;
-		}
-
-	    public bool TryFindTransaction(uint256 transactionId, int blockHeight, out Transaction transaction)
-	    {
-			transaction = null;
-			if (blockHeight == -1) return false;
-			if (BestHeight < blockHeight) return false;
-
-		    try
-		    {
-			    var block = Chain[blockHeight];
-			    foreach(var tx in block.TrackedTransactions)
-			    {
-				    if(tx.GetHash() == transactionId)
-				    {
-					    transaction = tx;
-					    return true;
-				    }
-			    }
-		    }
-		    catch
-		    {
-				return false;
-		    }
-			return false;
-	    }
-
-	    /// <summary> int: block height, if tx is not in blockchain yet -1 </summary>
-		public ConcurrentObservableDictionary<uint256, int> TrackedTransactions { get; }
-			= new ConcurrentObservableDictionary<uint256, int>();
+	    public ConcurrentObservableHashSet<SmartTransaction> TrackedTransactions { get; }
+			= new ConcurrentObservableHashSet<SmartTransaction>();
 		public ConcurrentHashSet<Script> TrackedScriptPubKeys { get; }
 			= new ConcurrentHashSet<Script>();
 
 	    public readonly UnprocessedBlockBuffer UnprocessedBlockBuffer = new UnprocessedBlockBuffer();
 
-		public int WorstHeight => Chain.Count == 0 ? -1 : Chain.Values.Select(block => block.Height).Min();
-		public int BestHeight => Chain.Count == 0 ? -1 : Chain.Values.Select(block => block.Height).Max();
-		public int BlockCount => Chain.Count;
+		public int WorstHeight => MerkleChain.Count == 0 ? -1 : MerkleChain.Select(block => block.Height).Min();
+		public int BestHeight => MerkleChain.Count == 0 ? -1 : MerkleChain.Select(block => block.Height).Max();
+		public int BlockCount => MerkleChain.Count;
 
 		#endregion
 
@@ -175,21 +117,20 @@ namespace HBitcoin.FullBlockSpv
 
 		/// <summary> Track a transaction </summary>
 		/// <returns>False if not confirmed. True if confirmed. If too old you need to resync the chain.</returns>
-		public bool Track(uint256 transactionId)
+		public bool Track(Transaction transaction)
 		{
 			// if already tracks it
-			if (TrackedTransactions.Keys.Contains(transactionId))
+			if (TrackedTransactions.Any(x=> x.GetHash() == transaction.GetHash()))
 			{
 				// find it 
-				var tracked = TrackedTransactions.First(x => x.Key.Equals(transactionId));
+				var tracked = TrackedTransactions.First(x => x.GetHash().Equals(transaction.GetHash()));
 				// return false if not confirmed yet
-				if (tracked.Value == -1) return false;
 				// return true if confirmed
-				else return true;
+				return tracked.Confirmed;
 			}
 
 			// if didn't track it yet add to tracked transactions
-			TrackedTransactions.AddOrReplace(transactionId, -1);
+			TrackedTransactions.TryAdd(new SmartTransaction(transaction));
 			return false; // since it didn't found, didn't confirmed
 		}
 		/// <param name="scriptPubKey">BitcoinAddress.ScriptPubKey</param>
@@ -205,32 +146,29 @@ namespace HBitcoin.FullBlockSpv
 		/// <param name="height"></param>
 		/// <param name="block"></param>
 		/// <returns>empty collection if not found any</returns>
-		private ConcurrentHashSet<uint256> TrackIfFindRelatedTransactions(Script scriptPubKey, int height, Block block)
+		private ConcurrentHashSet<SmartTransaction> TrackIfFindRelatedTransactions(Script scriptPubKey, int height, Block block)
 		{
-			var found = new ConcurrentHashSet<uint256>();
+			var found = new ConcurrentHashSet<SmartTransaction>();
 			foreach (var tx in block.Transactions)
 			{
 				foreach (var output in tx.Outputs)
 				{
 					if (output.ScriptPubKey.Equals(scriptPubKey))
 					{
-						TrackedTransactions.AddOrReplace(tx.GetHash(), height);
-						found.Add(tx.GetHash());
+						TrackedTransactions.TryAdd(new SmartTransaction(tx, height));
+						found.Add(new SmartTransaction(tx, height));
 					}
 				}
 			}
 
 			return found;
 		}
-		private ConcurrentHashSet<uint256> GetNotYetFoundTrackedTransactions()
+		private ConcurrentHashSet<SmartTransaction> GetNotYetFoundTrackedTransactions()
 		{
-			var notFound = new ConcurrentHashSet<uint256>();
-			foreach (var tx in TrackedTransactions)
+			var notFound = new ConcurrentHashSet<SmartTransaction>();
+			foreach (var tx in TrackedTransactions.Where(x=> !x.Confirmed))
 			{
-				if (tx.Value == -1)
-				{
-					notFound.Add(tx.Key);
-				}
+				notFound.Add(tx);
 			}
 			return notFound;
 		}
@@ -240,22 +178,13 @@ namespace HBitcoin.FullBlockSpv
 		public void ReorgOne()
 		{
 			// remove the last block
-			if (Chain.Count != 0)
+			if (MerkleChain.Count != 0)
 			{
-				TrackingBlock pb = Chain.FirstOrDefault(x => x.Value.Height == BestHeight).Value;
+				SmartMerkleBlock bestMerkleBlock = MerkleChain.FirstOrDefault(x => x.Height == BestHeight);
 
-				if(default(TrackingBlock) != pb)
+				if(default(SmartMerkleBlock) != bestMerkleBlock)
 				{
-					Chain.Remove(BestHeight);
-
-					if(pb.TrackedTransactions.Count != 0)
-					{
-						// set the transactions to unconfirmed
-						foreach(var txId in pb.TrackedTransactions.Select(x => x.GetHash()))
-						{
-							TrackedTransactions.AddOrReplace(txId, -1);
-						}
-					}
+					MerkleChain.TryRemove(bestMerkleBlock);
 				}
 			}
 		}
@@ -267,7 +196,7 @@ namespace HBitcoin.FullBlockSpv
 
 	    private void ProcessBlock(int height, Block block)
 		{
-			ConcurrentHashSet<uint256> justFoundTransactions = new ConcurrentHashSet<uint256>();
+			ConcurrentHashSet<SmartTransaction> justFoundTransactions = new ConcurrentHashSet<SmartTransaction>();
 
 			// 1. Look for transactions, related to our scriptpubkeys
 			foreach (var spk in TrackedScriptPubKeys)
@@ -279,18 +208,18 @@ namespace HBitcoin.FullBlockSpv
 			}
 
 			// 2. Look for transactions, we are waiting to confirm
-			ConcurrentHashSet<uint256> notYetFoundTrackedTransactions = GetNotYetFoundTrackedTransactions();
+			ConcurrentHashSet<SmartTransaction> notYetFoundTrackedTransactions = GetNotYetFoundTrackedTransactions();
 			
-			foreach (var txid in notYetFoundTrackedTransactions)
+			foreach (var smartTransaction in notYetFoundTrackedTransactions)
 			{
-				if (block.Transactions.Any(x => x.GetHash().Equals(txid)))
+				if (block.Transactions.Any(x => x.GetHash().Equals(smartTransaction.GetHash())))
 				{
-					justFoundTransactions.Add(txid);
+					justFoundTransactions.Add(smartTransaction);
 				}
 			}
 
 			// 3. Look for transactions, those are spending any of our transactions
-			foreach(var txid in TrackedTransactions.Keys)
+			foreach(var smartTransaction in TrackedTransactions)
 			{
 				foreach(var tx in block.Transactions)
 				{
@@ -298,9 +227,9 @@ namespace HBitcoin.FullBlockSpv
 					{
 						try
 						{
-							if(input.PrevOut.Hash == txid)
+							if(input.PrevOut.Hash == smartTransaction.GetHash())
 							{
-								justFoundTransactions.Add(txid);
+								justFoundTransactions.Add(smartTransaction);
 							}
 						}
 						catch
@@ -311,17 +240,8 @@ namespace HBitcoin.FullBlockSpv
 				}
 			}
 
-			var trackingBlock = new TrackingBlock(height, block, justFoundTransactions.ToArray());
-			foreach (var txid in justFoundTransactions)
-			{
-				foreach (var tx in block.Transactions)
-				{
-					if (tx.GetHash().Equals(txid))
-						trackingBlock.TrackedTransactions.Add(tx);
-				}
-			}
-
-			Chain.AddOrReplace(trackingBlock.Height, trackingBlock);
+			var trackingBlock = new SmartMerkleBlock(height, block, justFoundTransactions.Select(x=> x.GetHash()).ToArray());
+			MerkleChain.Add(trackingBlock);
 		}
 
 
@@ -342,7 +262,7 @@ namespace HBitcoin.FullBlockSpv
 
 	    private const string TrackedScriptPubKeysFileName = "TrackedScriptPubKeys.dat";
 	    private const string TrackedTransactionsFileName = "TrackedTransactions.dat";
-	    private const string TrackingChainFileName = "TrackingChain.dat";
+	    private const string MerkleChainFileName = "MerkleChain.dat";
 
 		private static readonly byte[] blockSep = new byte[] { 0x10, 0x1A, 0x7B, 0x23, 0x5D, 0x12, 0x7D };
 		public async Task SaveAsync(string trackingChainFolderPath)
@@ -350,7 +270,7 @@ namespace HBitcoin.FullBlockSpv
 			await Saving.WaitAsync().ConfigureAwait(false);
 			try
 			{
-				if (TrackedScriptPubKeys.Count > 0 || TrackedTransactions.Count > 0 || Chain.Count > 0)
+				if (TrackedScriptPubKeys.Count > 0 || TrackedTransactions.Count > 0 || MerkleChain.Count > 0)
 				{
 					Directory.CreateDirectory(trackingChainFolderPath);
 				}
@@ -366,16 +286,16 @@ namespace HBitcoin.FullBlockSpv
 				{
 					File.WriteAllLines(
 						Path.Combine(trackingChainFolderPath, TrackedTransactionsFileName),
-						TrackedTransactions.Select(x => $"{x.Key}:{x.Value}"));
+						TrackedTransactions.Select(x => $"{x.Transaction.ToHex()}:{x.Height}"));
 				}
 
-				if (Chain.Count > 0)
+				if (MerkleChain.Count > 0)
 				{
-					var path = Path.Combine(trackingChainFolderPath, TrackingChainFileName);
+					var path = Path.Combine(trackingChainFolderPath, MerkleChainFileName);
 
 					if(File.Exists(path))
 					{
-						const string backupName = TrackingChainFileName + "_backup";
+						const string backupName = MerkleChainFileName + "_backup";
 						var backupPath = Path.Combine(trackingChainFolderPath, backupName);
 						File.Copy(path, backupPath, overwrite: true);
 						File.Delete(path);
@@ -383,25 +303,15 @@ namespace HBitcoin.FullBlockSpv
 
 					using(FileStream stream = File.OpenWrite(path))
 					{
-						var toFile = Chain.Values.First().ToBytes();
+						var toFile = MerkleChain.First().ToBytes();
 						await stream.WriteAsync(toFile, 0, toFile.Length).ConfigureAwait(false);
-						foreach(var block in Chain.Values.Skip(1))
+						foreach(var block in MerkleChain.Skip(1))
 						{
 							await stream.WriteAsync(blockSep, 0, blockSep.Length).ConfigureAwait(false);
 							var blockBytes = block.ToBytes();
 							await stream.WriteAsync(blockBytes, 0, blockBytes.Length).ConfigureAwait(false);
 						}
 					}
-
-					//byte[] toFile = Chain.Values.First().ToBytes();
-					//foreach (var block in Chain.Values.Skip(1))
-					//{
-					//	toFile = toFile.Concat(blockSep).Concat(block.ToBytes()).ToArray();
-					//}
-
-					//var path = Path.Combine(trackingChainFolderPath, TrackingChainFileName);
-					//File.WriteAllBytes(path,
-					//	toFile);
 				}
 			}
 			finally
@@ -433,18 +343,17 @@ namespace HBitcoin.FullBlockSpv
 					foreach (var line in File.ReadAllLines(tt))
 					{
 						var pieces = line.Split(':');
-						TrackedTransactions.TryAdd(new uint256(pieces[0]), int.Parse(pieces[1]));
+						TrackedTransactions.TryAdd(new SmartTransaction(new Transaction(pieces[0]), int.Parse(pieces[1])));
 					}
 				}
 
-				var pbc = Path.Combine(trackingChainFolderPath, TrackingChainFileName);
+				var pbc = Path.Combine(trackingChainFolderPath, MerkleChainFileName);
 				if (File.Exists(pbc) && new FileInfo(pbc).Length != 0)
 				{
 					foreach (var block in Util.Separate(File.ReadAllBytes(pbc), blockSep))
 					{
-						TrackingBlock pb = new TrackingBlock().FromBytes(block);
-
-						Chain.TryAdd(pb.Height, pb);
+						SmartMerkleBlock smartMerkleBlock = SmartMerkleBlock.FromBytes(block);
+						MerkleChain.Add(smartMerkleBlock);
 					}
 				}
 			}

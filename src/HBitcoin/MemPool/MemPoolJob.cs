@@ -29,30 +29,9 @@ namespace HBitcoin.MemPool
 		public static event EventHandler StateChanged;
 		private static void OnStateChanged() => StateChanged?.Invoke(null, EventArgs.Empty);
 
-		public static ObservableCollection<Transaction> TrackedTransactions = new ObservableCollection<Transaction>();
-		public static bool TryFindTransaction(uint256 transactionId, out Transaction transaction)
-		{
-			transaction = null;
+		public static ConcurrentObservableHashSet<Transaction> TrackedTransactions = new ConcurrentObservableHashSet<Transaction>();
 
-			try
-			{
-				foreach (var tx in TrackedTransactions)
-				{
-					if (tx.GetHash() == transactionId)
-					{
-						transaction = tx;
-						return true;
-					}
-				}
-			}
-			catch
-			{
-				return false;
-			}
-			return false;
-		}
-
-		public static ConcurrentDictionary<uint256, Transaction> Transactions { get; private set; } = new ConcurrentDictionary<uint256, Transaction>();
+		public static ConcurrentHashSet<Transaction> Transactions { get; private set; } = new ConcurrentHashSet<Transaction>();
 
 		public static async Task StartAsync(CancellationToken ctsToken)
 		{
@@ -123,12 +102,11 @@ namespace HBitcoin.MemPool
 				// a block just confirmed, take out the ones we are concerned
 				if (TrackedTransactions.Count == 0) continue;
 				if(WalletJob.TrackingChain.TrackedTransactions.Count == 0) continue;
-				IEnumerable<uint256> justConfirmedTransactions;
+				IEnumerable<SmartTransaction> justConfirmedTransactions;
 				try
 				{
-					 justConfirmedTransactions = WalletJob.TrackingChain.TrackedTransactions
-						.Where(x => x.Value.Equals(_lastSeenBlockHeight))
-						.Select(x => x.Key);
+					justConfirmedTransactions = WalletJob.TrackingChain.TrackedTransactions
+						.Where(x => x.Height.Equals(_lastSeenBlockHeight));
 				}
 				catch(ArgumentNullException)
 				{
@@ -139,8 +117,8 @@ namespace HBitcoin.MemPool
 				{
 					foreach(var ttx in TrackedTransactions)
 					{
-						if (tx.Equals(ttx.GetHash()))
-							TrackedTransactions.Remove(ttx);
+						if (tx.GetHash().Equals(ttx.GetHash()))
+							TrackedTransactions.TryRemove(ttx);
 					}
 				}
 
@@ -170,21 +148,21 @@ namespace HBitcoin.MemPool
 						if(_confirmationHappening) return;
 						if(ctsToken.IsCancellationRequested) return;
 
-						Transactions.AddOrReplace(tx.GetHash(), tx);
+						Transactions.Add(tx);
 
 						// todo handle malleated transactions
 						// todo handle transactions those are dropping out of the mempool
 						// if we track it, then add
 						// only if -1 it's not confirmed or present
-						var awaitedTxids = WalletJob.TrackingChain.TrackedTransactions.Where(x => x.Value == -1).Select(x => x.Key);
+						IEnumerable<SmartTransaction> awaitedTransactions = WalletJob.TrackingChain.TrackedTransactions.Where(x => !x.Confirmed);
 						// if we are interested in the tx
-						if(awaitedTxids.Contains(tx.GetHash()))
+						if(awaitedTransactions.Select(x=>x.GetHash()).Contains(tx.GetHash()))
 						{
 							var alreadyTrackedTxids = TrackedTransactions.Select(x => x.GetHash());
 							// if not already tracking the track
 							if(!alreadyTrackedTxids.Contains(tx.GetHash()))
 							{
-								TrackedTransactions.Add(tx);
+								TrackedTransactions.TryAdd(tx);
 							}
 						}
 
@@ -197,7 +175,7 @@ namespace HBitcoin.MemPool
 								// if not already tracking the transaction the track
 								if(!alreadyTrackedTxids.Contains(tx.GetHash()))
 								{
-									TrackedTransactions.Add(tx);
+									TrackedTransactions.TryAdd(tx);
 								}
 							}
 						}

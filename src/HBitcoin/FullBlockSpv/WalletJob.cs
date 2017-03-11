@@ -114,7 +114,7 @@ namespace HBitcoin.FullBlockSpv
 	    public static NodesGroup Nodes { get; private set; }
 	    private static LookaheadBlockPuller BlockPuller;
 		
-		public static ConcurrentObservableDictionary<Script, ObservableCollection<ScriptPubKeyHistoryRecord>> SafeHistory = new ConcurrentObservableDictionary<Script, ObservableCollection<ScriptPubKeyHistoryRecord>>();
+		public static ConcurrentObservableDictionary<Script, ConcurrentObservableHashSet<ScriptPubKeyHistoryRecord>> SafeHistory = new ConcurrentObservableDictionary<Script, ConcurrentObservableHashSet<ScriptPubKeyHistoryRecord>>();
 		
 		private const string WorkFolderPath = "FullBlockSpvData";
 		private static string _addressManagerFilePath => Path.Combine(WorkFolderPath, $"AddressManager{Safe.Network}.dat");
@@ -359,10 +359,10 @@ namespace HBitcoin.FullBlockSpv
 		    var scriptPubKeys = TrackingChain.TrackedScriptPubKeys;
 		    foreach(var scriptPubKey in scriptPubKeys)
 		    {
-				ObservableCollection<ScriptPubKeyHistoryRecord> records = new ObservableCollection<ScriptPubKeyHistoryRecord>();
+				ConcurrentObservableHashSet<ScriptPubKeyHistoryRecord> records = new ConcurrentObservableHashSet<ScriptPubKeyHistoryRecord>();
 
-				ConcurrentDictionary<Transaction, int> receivedTransactions;
-				ConcurrentDictionary<Transaction, int> spentTransactions;
+				ConcurrentHashSet<SmartTransaction> receivedTransactions;
+				ConcurrentHashSet<SmartTransaction> spentTransactions;
 
 			    if(TryFindAllChainAndMemPoolTransactions(scriptPubKey, out receivedTransactions, out spentTransactions))
 			    {
@@ -372,12 +372,12 @@ namespace HBitcoin.FullBlockSpv
 
 						record.Amount = Money.Zero; //for now
 
-					    record.TransactionId = tx.Key.GetHash();
+					    record.TransactionId = tx.GetHash();
 
-						if(tx.Value == -1) 
+						record.BlockHeight = tx.Height;
+
+						if(!tx.Confirmed) 
 					    {
-							record.Confirmation = 0;
-
 							var contains = false;
 							// if already contains, don't modify timestamp
 							if (SafeHistory.ContainsKey(scriptPubKey))
@@ -385,7 +385,7 @@ namespace HBitcoin.FullBlockSpv
 								var rcrds = SafeHistory[scriptPubKey];
 								foreach(var rcd in rcrds)
 								{
-									if(rcd.TransactionId == tx.Key.GetHash())
+									if(rcd.TransactionId == tx.GetHash())
 									{
 										contains = true;
 									}
@@ -396,11 +396,10 @@ namespace HBitcoin.FullBlockSpv
 					    }
 					    else
 						{
-							record.Confirmation = BestHeight - tx.Value + 1;
-							record.TimeStamp = HeaderChain.GetBlock(tx.Value).Header.BlockTime;
+							record.TimeStamp = HeaderChain.GetBlock(tx.Height).Header.BlockTime;
 					    }
 
-						var coins = tx.Key.Outputs.AsCoins();
+						var coins = tx.Transaction.Outputs.AsCoins();
 						foreach(var coin in coins)
 						{
 							if(coin.ScriptPubKey == scriptPubKey)
@@ -411,12 +410,12 @@ namespace HBitcoin.FullBlockSpv
 
 						if(spentTransactions.Count != 0)
 						{
-							foreach(var input in tx.Key.Inputs)
+							foreach(var input in tx.Transaction.Inputs)
 							{
-								Transaction spent = spentTransactions.FirstOrDefault(x => x.Key.GetHash() == input.PrevOut.Hash).Key;
-								if(default(Transaction) != spent)
+								SmartTransaction spent = spentTransactions.FirstOrDefault(x => x.GetHash() == input.PrevOut.Hash);
+								if(default(SmartTransaction) != spent)
 								{
-									var spentCoins = spent.Outputs.AsCoins();
+									var spentCoins = spent.Transaction.Outputs.AsCoins();
 									foreach(var spentCoin in spentCoins)
 									{
 										if (spentCoin.ScriptPubKey == scriptPubKey)
@@ -428,7 +427,7 @@ namespace HBitcoin.FullBlockSpv
 							}
 						}
 
-						records.Add(record);
+						records.TryAdd(record);
 					}
 			    }
 
@@ -443,23 +442,23 @@ namespace HBitcoin.FullBlockSpv
 	    /// <param name="receivedTransactions">int: block height</param>
 	    /// <param name="spentTransactions">int: block height</param>
 	    /// <returns></returns>
-	    public static bool TryFindAllChainAndMemPoolTransactions(Script scriptPubKey, out ConcurrentDictionary<Transaction, int> receivedTransactions, out ConcurrentDictionary<Transaction, int> spentTransactions)
+	    public static bool TryFindAllChainAndMemPoolTransactions(Script scriptPubKey, out ConcurrentHashSet<SmartTransaction> receivedTransactions, out ConcurrentHashSet<SmartTransaction> spentTransactions)
 	    {
 			var found = false;
-			receivedTransactions = new ConcurrentDictionary<Transaction, int>();
-			spentTransactions = new ConcurrentDictionary<Transaction, int>();
+			receivedTransactions = new ConcurrentHashSet<SmartTransaction>();
+			spentTransactions = new ConcurrentHashSet<SmartTransaction>();
 			
 			foreach (var tx in GetAllChainAndMemPoolTransactions())
 			{
 				// if already has that tx continue
-				if (receivedTransactions.Keys.Any(x => x.GetHash() == tx.Key.GetHash()))
+				if (receivedTransactions.Any(x => x.GetHash() == tx.GetHash()))
 					continue;
 
-				foreach (var output in tx.Key.Outputs)
+				foreach (var output in tx.Transaction.Outputs)
 				{
 					if (output.ScriptPubKey.Equals(scriptPubKey))
 					{
-						receivedTransactions.AddOrReplace(tx.Key, tx.Value);
+						receivedTransactions.Add(tx);
 						found = true;
 					}
 				}
@@ -470,14 +469,14 @@ namespace HBitcoin.FullBlockSpv
 			    foreach(var tx in GetAllChainAndMemPoolTransactions())
 			    {
 				    // if already has that tx continue
-				    if(spentTransactions.Keys.Any(x => x.GetHash() == tx.Key.GetHash()))
+				    if(spentTransactions.Any(x => x.GetHash() == tx.GetHash()))
 					    continue;
 
-				    foreach(var input in tx.Key.Inputs)
+				    foreach(var input in tx.Transaction.Inputs)
 				    {
-					    if(receivedTransactions.Keys.Select(x => x.GetHash()).Contains(input.PrevOut.Hash))
+					    if(receivedTransactions.Select(x => x.GetHash()).Contains(input.PrevOut.Hash))
 					    {
-						    spentTransactions.AddOrReplace(tx.Key, tx.Value);
+						    spentTransactions.Add(tx);
 						    found = true;
 					    }
 				    }
@@ -491,28 +490,22 @@ namespace HBitcoin.FullBlockSpv
 		/// 
 		/// </summary>
 		/// <returns>int: block height, -1 if mempool</returns>
-		public static ConcurrentDictionary<Transaction, int> GetAllChainAndMemPoolTransactions()
+		public static ConcurrentHashSet<SmartTransaction> GetAllChainAndMemPoolTransactions()
 		{
-			var transactions = new ConcurrentDictionary<Transaction, int>();
+			var transactions = new ConcurrentHashSet<SmartTransaction>();
 
-			foreach (KeyValuePair<uint256, int> tx in TrackingChain.TrackedTransactions)
+			foreach (var tx in TrackingChain.TrackedTransactions)
 			{
-				Transaction foundTransaction;
-				if (tx.Value != -1)
+				if (tx.Confirmed)
 				{
-					if(TrackingChain.TryFindTransaction(tx.Key, tx.Value, out foundTransaction))
-					{
-						transactions.AddOrReplace(foundTransaction, tx.Value);
-					}
+					transactions.Add(tx);
 				}
 				else
 				{
-					if (MemPoolJob.State == MemPoolState.Syncing)
+					Transaction foundTransaction = MemPoolJob.TrackedTransactions.FirstOrDefault(x => x.GetHash() == tx.GetHash());
+					if(foundTransaction != default(Transaction))
 					{
-						if (MemPoolJob.TryFindTransaction(tx.Key, out foundTransaction))
-						{
-							transactions.AddOrReplace(foundTransaction, -1);
-						}
+						transactions.Add(tx);
 					}
 				}
 			}
@@ -591,7 +584,7 @@ namespace HBitcoin.FullBlockSpv
 						{
 							Nodes.Purge("no reason");
 							System.Diagnostics.Debug.WriteLine(
-								$"Purging nodes, reason: couldn't download block in {nameof(currTimeoutDownSec)} seconds.");
+								$"Purging nodes, reason: couldn't download block in {currTimeoutDownSec} seconds.");
 							return null;
 						}
 						return t.Result;

@@ -65,7 +65,7 @@ namespace Stratis.Bitcoin.BlockPulling
 						// the expected logic:
 						// - partially validate the header
 						// - check if block is a new best chain
-						// - set Chain.Tip (and corresponding ChainBehaviour.PendingTIp for this node)
+						// - set MerkleChain.Tip (and corresponding ChainBehaviour.PendingTIp for this node)
 						// - push the block to the download dictionary
 						return;
 					}
@@ -169,7 +169,7 @@ namespace Stratis.Bitcoin.BlockPulling
 			//{
 			//	if (this.LastUnknownBlock != null)
 			//	{
-			//		var chainedBlock = this._Puller.Chain.GetBlock(this.LastUnknownBlock);
+			//		var chainedBlock = this._Puller.MerkleChain.GetBlock(this.LastUnknownBlock);
 			//		if (chainedBlock != null && chainedBlock.ChainWork > 0)
 			//		{
 			//			if (this.BestKnownBlock == null || chainedBlock.ChainWork >= this.BestKnownBlock.ChainWork)
@@ -184,7 +184,7 @@ namespace Stratis.Bitcoin.BlockPulling
 			//{
 			//	ProcessBlockAvailability();
 
-			//	var chainedBlock = this._Puller.Chain.GetBlock(hash);
+			//	var chainedBlock = this._Puller.MerkleChain.GetBlock(hash);
 			//	if (chainedBlock != null && chainedBlock.ChainWork > 0)
 			//	{
 			//		// An actually better block was announced.

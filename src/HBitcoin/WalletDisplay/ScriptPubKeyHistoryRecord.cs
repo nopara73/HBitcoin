@@ -37,12 +37,18 @@ namespace HBitcoin.WalletDisplay
 			get { return _amount; }
 			set { SetField(ref _amount, value); }
 		}
-		private int _confirmation;
-		public int Confirmation
+		private int _blockHeight;
+		/// <summary>
+		/// -1 if unconfirmed
+		/// </summary>
+		public int BlockHeight
 		{
-			get { return _confirmation; }
-			set { SetField(ref _confirmation, value); }
+			get { return _blockHeight; }
+			set { SetField(ref _blockHeight, value); }
 		}
+
+		public bool Confirmed => BlockHeight != -1;
+
 		private uint256 _transactionId;
 		public uint256 TransactionId
 		{

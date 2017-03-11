@@ -203,7 +203,7 @@ namespace HBitcoin.Tests
 					Task.Delay(1000).Wait();
 				}
 				BitcoinAddress firstReceive = null;
-				foreach(KeyValuePair<Script, ObservableCollection<ScriptPubKeyHistoryRecord>> scriptPubKey in WalletJob.SafeHistory)
+				foreach(KeyValuePair<Script, ConcurrentObservableHashSet<ScriptPubKeyHistoryRecord>> scriptPubKey in WalletJob.SafeHistory)
 				{
 					if(scriptPubKey.Value.Count == 0)
 					{
@@ -215,14 +215,14 @@ namespace HBitcoin.Tests
 				var hasMoneyAddress = BitcoinAddress.Create("mmVZjqZjmLvxc3YFhWqYWoe5anrWVcoJcc");
 				Assert.True(firstReceive.ToWif() != hasMoneyAddress.ToWif());
 
-				foreach (KeyValuePair<Script, ObservableCollection<ScriptPubKeyHistoryRecord>> scriptPubKey in WalletJob.SafeHistory)
+				foreach (KeyValuePair<Script, ConcurrentObservableHashSet<ScriptPubKeyHistoryRecord>> scriptPubKey in WalletJob.SafeHistory)
 				{
 					if (scriptPubKey.Key == hasMoneyAddress.ScriptPubKey)
 					{
 						var record = scriptPubKey.Value.FirstOrDefault();
 						Assert.True(record != default(ScriptPubKeyHistoryRecord));
 
-						Assert.True(record.Confirmation > 0);
+						Assert.True(record.Confirmed);
 						Assert.True(record.Amount == new Money(0.1m, MoneyUnit.BTC));
 						DateTimeOffset expTime;
 						DateTimeOffset.TryParse("2017.03.06. 16:47:15 +00:00", out expTime);
@@ -245,7 +245,7 @@ namespace HBitcoin.Tests
 		{
 			// load wallet
 			Network network = Network.TestNet;
-			string path = $"CommittedWallets/HiddenWallet.json";
+			string path = "CommittedWallets/HiddenWallet.json";
 			const string password = "";
 			// I change it because I am using a very old wallet to test
 			Safe.EarliestPossibleCreationTime = DateTimeOffset.ParseExact("2016-12-18", "yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -295,7 +295,7 @@ namespace HBitcoin.Tests
 				System.Diagnostics.Debug.WriteLine("---------------------------------------------------------------------------");
 				List<ScriptPubKeyHistoryRecord> records = new List<ScriptPubKeyHistoryRecord>();
 
-				foreach (KeyValuePair<Script, ObservableCollection<ScriptPubKeyHistoryRecord>> scriptPubKeyHistory in WalletJob.SafeHistory)
+				foreach (KeyValuePair<Script, ConcurrentObservableHashSet<ScriptPubKeyHistoryRecord>> scriptPubKeyHistory in WalletJob.SafeHistory)
 				{
 					if (scriptPubKeyHistory.Value.Count > 0)
 					{
@@ -307,7 +307,7 @@ namespace HBitcoin.Tests
 				}
 				foreach(var record in records.OrderBy(x => x.TimeStamp))
 				{
-					System.Diagnostics.Debug.WriteLine($@"{record.TimeStamp.DateTime}	{record.Amount}	{record.Confirmation > 0}		{record.TransactionId}");
+					System.Diagnostics.Debug.WriteLine($@"{record.TimeStamp.DateTime}	{record.Amount}	{record.Confirmed}		{record.TransactionId}");
 				}
 
 				System.Diagnostics.Debug.WriteLine("");

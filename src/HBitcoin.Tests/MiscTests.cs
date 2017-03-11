@@ -14,7 +14,7 @@ namespace HBitcoin.Tests
     public class MiscTests
     {
 		[Fact]
-		public void ObservableDictionaryTest()
+		public void ConcurrentObservableDictionaryTest()
 		{
 			ConcurrentObservableDictionary<int, string> dict = new ConcurrentObservableDictionary<int, string>();
 			var times = 0;
@@ -32,6 +32,26 @@ namespace HBitcoin.Tests
 
 			Assert.True(dict.Values.All(x => x == "boo"));
 			Assert.Equal(5, times);
+		}
+
+		[Fact]
+		public void ConcurrentObservableHashSetTest()
+		{
+			ConcurrentObservableHashSet<string> hashSet = new ConcurrentObservableHashSet<string>();
+			var times = 0;
+			hashSet.CollectionChanged += delegate
+			{
+				times++;
+			};
+
+			hashSet.Clear(); // no fire
+			hashSet.TryAdd("foo"); // fire
+			hashSet.TryAdd("foo"); // no fire
+			hashSet.TryAdd("moo"); // fire
+			hashSet.TryRemove("foo"); // fire
+			hashSet.Clear(); // fire
+			
+			Assert.Equal(4, times);
 		}
 	}
 }

@@ -300,7 +300,7 @@ namespace Stratis.Bitcoin.BlockPulling
 				}
 				i = i == waitTime.Length - 1 ? 0 : i + 1;
 			}
-		}
+	}
 
 		public virtual bool IsDownloading(uint256 hash)
 		{
