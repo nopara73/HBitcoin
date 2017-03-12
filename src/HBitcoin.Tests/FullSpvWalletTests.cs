@@ -12,6 +12,7 @@ using HBitcoin.WalletDisplay;
 using NBitcoin;
 using Xunit;
 using Xunit.Abstractions;
+using System.Diagnostics;
 
 namespace HBitcoin.Tests
 {
@@ -38,7 +39,7 @@ namespace HBitcoin.Tests
 				safe = Safe.Create(out mnemonic, password, path, network);
 			}
 
-			System.Diagnostics.Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
+			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
 			WalletJob.Init(safe);
@@ -50,14 +51,14 @@ namespace HBitcoin.Tests
 				if(WalletJob.MaxConnectedNodeCount == WalletJob.ConnectedNodeCount)
 				{
 					fullyConnected = true;
-					System.Diagnostics.Debug.WriteLine(
+					Debug.WriteLine(
 						$"{nameof(WalletJob.MaxConnectedNodeCount)} reached: {WalletJob.MaxConnectedNodeCount}");
 				}
-				else System.Diagnostics.Debug.WriteLine($"{nameof(WalletJob.ConnectedNodeCount)}: {WalletJob.ConnectedNodeCount}");
+				else Debug.WriteLine($"{nameof(WalletJob.ConnectedNodeCount)}: {WalletJob.ConnectedNodeCount}");
 			};
 			WalletJob.StateChanged += delegate
 			{
-				System.Diagnostics.Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
+				Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
 				if(WalletJob.State == WalletState.SyncingMempool)
 				{
 					synced = true;
@@ -133,7 +134,7 @@ namespace HBitcoin.Tests
 						// HEADERCHAIN
 						if (currHeaderHeight > _prevHeaderHeight)
 						{
-							System.Diagnostics.Debug.WriteLine($"HeaderChain height: {currHeaderHeight}");
+							Debug.WriteLine($"HeaderChain height: {currHeaderHeight}");
 							_prevHeaderHeight = currHeaderHeight;
 						}
 
@@ -141,7 +142,7 @@ namespace HBitcoin.Tests
 						var currHeight = WalletJob.BestHeight;
 						if (currHeight > _prevHeight)
 						{
-							System.Diagnostics.Debug.WriteLine($"Tracker height: {currHeight}");
+							Debug.WriteLine($"Tracker height: {currHeight}");
 							_prevHeight = currHeight;
 						}
 					}
@@ -162,7 +163,7 @@ namespace HBitcoin.Tests
 			const string password = "";
 			Safe safe = Safe.Load(password, path);
 			Assert.Equal(safe.Network, network);
-			System.Diagnostics.Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
+			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
 			WalletJob.Init(safe);
@@ -172,14 +173,14 @@ namespace HBitcoin.Tests
 			{
 				if(WalletJob.MaxConnectedNodeCount == WalletJob.ConnectedNodeCount)
 				{
-					System.Diagnostics.Debug.WriteLine(
+					Debug.WriteLine(
 						$"{nameof(WalletJob.MaxConnectedNodeCount)} reached: {WalletJob.MaxConnectedNodeCount}");
 				}
-				else System.Diagnostics.Debug.WriteLine($"{nameof(WalletJob.ConnectedNodeCount)}: {WalletJob.ConnectedNodeCount}");
+				else Debug.WriteLine($"{nameof(WalletJob.ConnectedNodeCount)}: {WalletJob.ConnectedNodeCount}");
 			};
 			WalletJob.StateChanged += delegate
 			{
-				System.Diagnostics.Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
+				Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
 				if(WalletJob.State == WalletState.SyncingMempool)
 				{
 					synced = true;
@@ -201,7 +202,7 @@ namespace HBitcoin.Tests
 				}
 
 				var hasMoneyAddress = BitcoinAddress.Create("mmVZjqZjmLvxc3YFhWqYWoe5anrWVcoJcc");
-				System.Diagnostics.Debug.WriteLine($"Checking proper balance on {hasMoneyAddress.ToWif()}");
+				Debug.WriteLine($"Checking proper balance on {hasMoneyAddress.ToWif()}");
 
 				var record = WalletJob.GetSafeHistory().FirstOrDefault();
 				Assert.True(record != default(SafeHistoryRecord));
@@ -231,7 +232,7 @@ namespace HBitcoin.Tests
 			Safe.EarliestPossibleCreationTime = DateTimeOffset.ParseExact("2016-12-18", "yyyy-MM-dd", CultureInfo.InvariantCulture);
 			Safe safe = Safe.Load(password, path);
 			Assert.Equal(safe.Network, network);
-			System.Diagnostics.Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
+			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
 			WalletJob.Init(safe);
@@ -242,14 +243,14 @@ namespace HBitcoin.Tests
 			{
 				if (WalletJob.MaxConnectedNodeCount == WalletJob.ConnectedNodeCount)
 				{
-					System.Diagnostics.Debug.WriteLine(
+					Debug.WriteLine(
 						$"{nameof(WalletJob.MaxConnectedNodeCount)} reached: {WalletJob.MaxConnectedNodeCount}");
 				}
-				else System.Diagnostics.Debug.WriteLine($"{nameof(WalletJob.ConnectedNodeCount)}: {WalletJob.ConnectedNodeCount}");
+				else Debug.WriteLine($"{nameof(WalletJob.ConnectedNodeCount)}: {WalletJob.ConnectedNodeCount}");
 			};
 			WalletJob.StateChanged += delegate
 			{
-				System.Diagnostics.Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
+				Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
 
 				if (WalletJob.State == WalletState.SyncingBlocks)
 				{
@@ -261,7 +262,7 @@ namespace HBitcoin.Tests
 					syncedOnce = true;
 				}
 			};
-			
+
 			// start syncing
 			var cts = new CancellationTokenSource();
 			var walletJobTask = WalletJob.StartAsync(cts.Token);
@@ -274,7 +275,7 @@ namespace HBitcoin.Tests
 					Task.Delay(1000).Wait();
 				}
 				ReportFullHistory();
-
+				
 				// wait until fully synced
 				while (!syncedOnce)
 				{
@@ -292,22 +293,23 @@ namespace HBitcoin.Tests
 
 		private static void ReportFullHistory()
 		{
-			if(!WalletJob.GetSafeHistory().Any())
+			var history = WalletJob.GetSafeHistory();
+			if (!history.Any())
 			{
-				System.Diagnostics.Debug.WriteLine("Wallet has no history...");
+				Debug.WriteLine("Wallet has no history...");
 				return;
 			}
 
-			System.Diagnostics.Debug.WriteLine("");
-			System.Diagnostics.Debug.WriteLine("---------------------------------------------------------------------------");
-			System.Diagnostics.Debug.WriteLine(@"Date			Amount		Confirmed	Transaction Id");
-			System.Diagnostics.Debug.WriteLine("---------------------------------------------------------------------------");
+			Debug.WriteLine("");
+			Debug.WriteLine("---------------------------------------------------------------------------");
+			Debug.WriteLine(@"Date			Amount		Confirmed	Transaction Id");
+			Debug.WriteLine("---------------------------------------------------------------------------");
 			
-			foreach (var record in WalletJob.GetSafeHistory())
+			foreach (var record in history)
 			{
-				System.Diagnostics.Debug.WriteLine($@"{record.TimeStamp.DateTime}	{record.Amount}	{record.Confirmed}		{record.TransactionId}");
+				Debug.WriteLine($@"{record.TimeStamp.DateTime}	{record.Amount}	{record.Confirmed}		{record.TransactionId}");
 			}
-			System.Diagnostics.Debug.WriteLine("");
+			Debug.WriteLine("");
 		}
 	}
 }

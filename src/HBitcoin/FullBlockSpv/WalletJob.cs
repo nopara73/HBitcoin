@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -159,7 +160,9 @@ namespace HBitcoin.FullBlockSpv
 						// if yes then deduct from amount (bitcoin output cannot be partially spent)
 						var prevOutput = inputTransaction.Transaction.Outputs[input.PrevOut.N];
 						if(scriptPubKeys.Contains(prevOutput.ScriptPubKey))
+						{
 							record.Amount -= prevOutput.Value;
+						}
 					}
 					// if no then whatever
 				}
@@ -339,7 +342,7 @@ namespace HBitcoin.FullBlockSpv
 			else SafeAccounts = new ConcurrentHashSet<SafeAccount>(accountsToTrack);
 
 		    TracksDefaultSafe = trackDefaultSafe;
-
+			
 		    State = WalletState.NotStarted;
 	    }
 
@@ -607,7 +610,7 @@ namespace HBitcoin.FullBlockSpv
 					    }
 				    }
 
-				    var chainedBlock = HeaderChain.GetBlock(height);
+					var chainedBlock = HeaderChain.GetBlock(height);
 				    BlockPuller.SetLocation(new ChainedBlock(chainedBlock.Previous.Header, chainedBlock.Previous.Height));
 				    Block block = null;
 				    CancellationTokenSource ctsBlockDownload = CancellationTokenSource.CreateLinkedTokenSource(
@@ -620,13 +623,13 @@ namespace HBitcoin.FullBlockSpv
 						if (t.IsCanceled || t.IsFaulted)
 						{
 							Nodes.Purge("no reason");
-							System.Diagnostics.Debug.WriteLine(
+							Debug.WriteLine(
 								$"Purging nodes, reason: couldn't download block in {currTimeoutDownSec} seconds.");
 							return null;
 						}
 						return t.Result;
 					}).ConfigureAwait(false);
-
+					
 					if (ctsToken.IsCancellationRequested) return;
 					if (blockDownloadTask.IsCanceled || blockDownloadTask.IsFaulted)
 						continue;
@@ -641,8 +644,8 @@ namespace HBitcoin.FullBlockSpv
 			    }
 				catch (Exception ex)
 				{
-					System.Diagnostics.Debug.WriteLine($"Ignoring {nameof(BlockPullerJobAsync)} exception:");
-					System.Diagnostics.Debug.WriteLine(ex);
+					Debug.WriteLine($"Ignoring {nameof(BlockPullerJobAsync)} exception:");
+					Debug.WriteLine(ex);
 				}
 			}
 		}
@@ -669,8 +672,8 @@ namespace HBitcoin.FullBlockSpv
 				}
 				catch(Exception ex)
 				{
-					System.Diagnostics.Debug.WriteLine($"Ignoring {nameof(PeriodicSaveAsync)} exception:");
-					System.Diagnostics.Debug.WriteLine(ex);
+					Debug.WriteLine($"Ignoring {nameof(PeriodicSaveAsync)} exception:");
+					Debug.WriteLine(ex);
 				}
 			}
 		}
@@ -684,7 +687,7 @@ namespace HBitcoin.FullBlockSpv
 			try
 		    {
 			    AddressManager.SavePeerFile(_addressManagerFilePath, Safe.Network);
-				System.Diagnostics.Debug.WriteLine($"Saved {nameof(AddressManager)}");
+				Debug.WriteLine($"Saved {nameof(AddressManager)}");
 
 				if (_connectionParameters != null)
 			    {
@@ -693,7 +696,7 @@ namespace HBitcoin.FullBlockSpv
 				    if(headerHeight > _savedHeaderHeight)
 				    {
 					    SaveHeaderChain();
-						System.Diagnostics.Debug.WriteLine($"Saved {nameof(HeaderChain)} at height: {headerHeight}");
+						Debug.WriteLine($"Saved {nameof(HeaderChain)} at height: {headerHeight}");
 					    _savedHeaderHeight = headerHeight;
 				    }
 			    }
@@ -708,7 +711,7 @@ namespace HBitcoin.FullBlockSpv
 		    if(trackingHeight > _savedTrackingHeight)
 		    {
 			    await Tracker.SaveAsync(_trackerFolderPath).ConfigureAwait(false);
-				System.Diagnostics.Debug.WriteLine($"Saved {nameof(Tracker)} at height: {trackingHeight}");
+				Debug.WriteLine($"Saved {nameof(Tracker)} at height: {trackingHeight}");
 			    _savedTrackingHeight = trackingHeight;
 		    }
 		}

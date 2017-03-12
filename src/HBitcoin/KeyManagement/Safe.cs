@@ -24,9 +24,9 @@ namespace HBitcoin.KeyManagement
 			return GetPrivateKey(index, hdPathType, account).ScriptPubKey.GetDestinationAddress(Network);
 		}
 
-		public ConcurrentHashSet<BitcoinAddress> GetFirstNAddresses(int addressCount, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null)
+		public IList<BitcoinAddress> GetFirstNAddresses(int addressCount, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null)
 		{
-			var addresses = new ConcurrentHashSet<BitcoinAddress>();
+			var addresses = new List<BitcoinAddress>();
 
 			for (var i = 0; i < addressCount; i++)
 			{
