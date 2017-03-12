@@ -11,7 +11,7 @@ using NBitcoin;
 
 namespace HBitcoin.FullBlockSpv
 {
-    public class TrackingChain
+    public class Tracker
     {
 		#region Members
 
@@ -102,10 +102,10 @@ namespace HBitcoin.FullBlockSpv
 
 		#region Constructors
 
-		private TrackingChain()
+		private Tracker()
 		{
 		}
-		public TrackingChain(Network network)
+		public Tracker(Network network)
 		{
 			Network = network;
 			UnprocessedBlockBuffer.HaveBlocks += UnprocessedBlockBuffer_HaveBlocks;
@@ -265,38 +265,38 @@ namespace HBitcoin.FullBlockSpv
 	    private const string MerkleChainFileName = "MerkleChain.dat";
 
 		private static readonly byte[] blockSep = new byte[] { 0x10, 0x1A, 0x7B, 0x23, 0x5D, 0x12, 0x7D };
-		public async Task SaveAsync(string trackingChainFolderPath)
+		public async Task SaveAsync(string trackerFolderPath)
 		{
 			await Saving.WaitAsync().ConfigureAwait(false);
 			try
 			{
 				if (TrackedScriptPubKeys.Count > 0 || TrackedTransactions.Count > 0 || MerkleChain.Count > 0)
 				{
-					Directory.CreateDirectory(trackingChainFolderPath);
+					Directory.CreateDirectory(trackerFolderPath);
 				}
 
 				if (TrackedScriptPubKeys.Count > 0)
 				{
 					File.WriteAllLines(
-						Path.Combine(trackingChainFolderPath, TrackedScriptPubKeysFileName),
+						Path.Combine(trackerFolderPath, TrackedScriptPubKeysFileName),
 						TrackedScriptPubKeys.Select(x => x.ToString()));
 				}
 
 				if (TrackedTransactions.Count > 0)
 				{
 					File.WriteAllLines(
-						Path.Combine(trackingChainFolderPath, TrackedTransactionsFileName),
+						Path.Combine(trackerFolderPath, TrackedTransactionsFileName),
 						TrackedTransactions.Select(x => $"{x.Transaction.ToHex()}:{x.Height}"));
 				}
 
 				if (MerkleChain.Count > 0)
 				{
-					var path = Path.Combine(trackingChainFolderPath, MerkleChainFileName);
+					var path = Path.Combine(trackerFolderPath, MerkleChainFileName);
 
 					if(File.Exists(path))
 					{
 						const string backupName = MerkleChainFileName + "_backup";
-						var backupPath = Path.Combine(trackingChainFolderPath, backupName);
+						var backupPath = Path.Combine(trackerFolderPath, backupName);
 						File.Copy(path, backupPath, overwrite: true);
 						File.Delete(path);
 					}
@@ -320,15 +320,15 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-		public async Task LoadAsync(string trackingChainFolderPath)
+		public async Task LoadAsync(string trackerFolderPath)
 		{
 			await Saving.WaitAsync().ConfigureAwait(false);
 			try
 			{
-				if (!Directory.Exists(trackingChainFolderPath))
-					throw new DirectoryNotFoundException($"No Blockchain found at {trackingChainFolderPath}");
+				if (!Directory.Exists(trackerFolderPath))
+					throw new DirectoryNotFoundException($"No Blockchain found at {trackerFolderPath}");
 
-				var tspb = Path.Combine(trackingChainFolderPath, TrackedScriptPubKeysFileName);
+				var tspb = Path.Combine(trackerFolderPath, TrackedScriptPubKeysFileName);
 				if (File.Exists(tspb) && new FileInfo(tspb).Length != 0)
 				{
 					foreach (var line in File.ReadAllLines(tspb))
@@ -337,7 +337,7 @@ namespace HBitcoin.FullBlockSpv
 					}
 				}
 
-				var tt = Path.Combine(trackingChainFolderPath, TrackedTransactionsFileName);
+				var tt = Path.Combine(trackerFolderPath, TrackedTransactionsFileName);
 				if (File.Exists(tt) && new FileInfo(tt).Length != 0)
 				{
 					foreach (var line in File.ReadAllLines(tt))
@@ -347,7 +347,7 @@ namespace HBitcoin.FullBlockSpv
 					}
 				}
 
-				var pbc = Path.Combine(trackingChainFolderPath, MerkleChainFileName);
+				var pbc = Path.Combine(trackerFolderPath, MerkleChainFileName);
 				if (File.Exists(pbc) && new FileInfo(pbc).Length != 0)
 				{
 					foreach (var block in Util.Separate(File.ReadAllBytes(pbc), blockSep))

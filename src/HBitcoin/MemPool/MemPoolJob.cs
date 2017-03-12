@@ -101,11 +101,11 @@ namespace HBitcoin.MemPool
 
 				// a block just confirmed, take out the ones we are concerned
 				if (TrackedTransactions.Count == 0) continue;
-				if(WalletJob.TrackingChain.TrackedTransactions.Count == 0) continue;
+				if(WalletJob.Tracker.TrackedTransactions.Count == 0) continue;
 				IEnumerable<SmartTransaction> justConfirmedTransactions;
 				try
 				{
-					justConfirmedTransactions = WalletJob.TrackingChain.TrackedTransactions
+					justConfirmedTransactions = WalletJob.Tracker.TrackedTransactions
 						.Where(x => x.Height.Equals(_lastSeenBlockHeight));
 				}
 				catch(ArgumentNullException)
@@ -154,7 +154,7 @@ namespace HBitcoin.MemPool
 						// todo handle transactions those are dropping out of the mempool
 						// if we track it, then add
 						// only if -1 it's not confirmed or present
-						IEnumerable<SmartTransaction> awaitedTransactions = WalletJob.TrackingChain.TrackedTransactions.Where(x => !x.Confirmed);
+						IEnumerable<SmartTransaction> awaitedTransactions = WalletJob.Tracker.TrackedTransactions.Where(x => !x.Confirmed);
 						// if we are interested in the tx
 						if(awaitedTransactions.Select(x=>x.GetHash()).Contains(tx.GetHash()))
 						{
@@ -169,7 +169,7 @@ namespace HBitcoin.MemPool
 						foreach(var spk in tx.Outputs.Select(x => x.ScriptPubKey))
 						{
 							// if we are tracking that scriptpubkey
-							if(WalletJob.TrackingChain.TrackedScriptPubKeys.Contains(spk))
+							if(WalletJob.Tracker.TrackedScriptPubKeys.Contains(spk))
 							{
 								var alreadyTrackedTxids = TrackedTransactions.Select(x => x.GetHash());
 								// if not already tracking the transaction the track

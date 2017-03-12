@@ -8,7 +8,7 @@ using NBitcoin;
 
 namespace HBitcoin.WalletDisplay
 {
-    public class ScriptPubKeyHistoryRecord
+    public class SafeHistoryRecord
     {
 		// http://stackoverflow.com/questions/35582162/how-to-implement-inotifypropertychanged-in-c-sharp-6-0
 		public event PropertyChangedEventHandler PropertyChanged;

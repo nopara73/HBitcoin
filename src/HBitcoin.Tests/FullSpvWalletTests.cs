@@ -63,7 +63,7 @@ namespace HBitcoin.Tests
 					synced = true;
 				}
 			};
-			Assert.True(WalletJob.Accounts.Count == 0);
+			Assert.True(WalletJob.SafeAccounts.Count == 0);
 			Assert.True(WalletJob.ConnectedNodeCount == 0);
 			if(WalletJob.CreationHeight != -1)
 			{
@@ -73,7 +73,7 @@ namespace HBitcoin.Tests
 			}
 			var allTxCount = WalletJob.GetAllChainAndMemPoolTransactions().Count;
 			Assert.True(allTxCount == 0);
-			Assert.True(WalletJob.SafeHistory.Count == 0);
+			Assert.True(!WalletJob.GetSafeHistory().Any());
 			Assert.True(WalletJob.State == WalletState.NotStarted);
 			Assert.True(WalletJob.TracksDefaultSafe);
 
@@ -99,17 +99,14 @@ namespace HBitcoin.Tests
 				Assert.True(WalletJob.State == WalletState.SyncingMempool);
 				Assert.True(WalletJob.CreationHeight != -1);
 				Assert.True(WalletJob.GetAllChainAndMemPoolTransactions().Count == 0);
-				foreach (var addrHistory in WalletJob.SafeHistory)
-				{
-					Assert.True(addrHistory.Value.Count == 0);
-				}
+				Assert.True(!WalletJob.GetSafeHistory().Any());
 				int headerHeight;
 				Assert.True(WalletJob.TryGetHeaderHeight(out headerHeight));
 				var expectedBlockCount = headerHeight - WalletJob.CreationHeight + 1;
-				Assert.True(WalletJob.TrackingChain.BlockCount == expectedBlockCount);
-				Assert.True(WalletJob.TrackingChain.TrackedScriptPubKeys.Count > 0);
-				Assert.True(WalletJob.TrackingChain.TrackedTransactions.Count == 0);
-				Assert.True(WalletJob.TrackingChain.WorstHeight == WalletJob.CreationHeight);
+				Assert.True(WalletJob.Tracker.BlockCount == expectedBlockCount);
+				Assert.True(WalletJob.Tracker.TrackedScriptPubKeys.Count > 0);
+				Assert.True(WalletJob.Tracker.TrackedTransactions.Count == 0);
+				Assert.True(WalletJob.Tracker.WorstHeight == WalletJob.CreationHeight);
 			}
 			finally
 			{
@@ -140,11 +137,11 @@ namespace HBitcoin.Tests
 							_prevHeaderHeight = currHeaderHeight;
 						}
 
-						// TRACKINGCHAIN
+						// TRACKER
 						var currHeight = WalletJob.BestHeight;
 						if (currHeight > _prevHeight)
 						{
-							System.Diagnostics.Debug.WriteLine($"TrackingChain height: {currHeight}");
+							System.Diagnostics.Debug.WriteLine($"Tracker height: {currHeight}");
 							_prevHeight = currHeight;
 						}
 					}
@@ -198,40 +195,23 @@ namespace HBitcoin.Tests
 			{
 				// wait until fully synced
 
-				while (!synced)
+				while(!synced)
 				{
 					Task.Delay(1000).Wait();
 				}
-				BitcoinAddress firstReceive = null;
-				foreach(KeyValuePair<Script, ConcurrentObservableHashSet<ScriptPubKeyHistoryRecord>> scriptPubKey in WalletJob.SafeHistory)
-				{
-					if(scriptPubKey.Value.Count == 0)
-					{
-						firstReceive = scriptPubKey.Key.GetDestinationAddress(WalletJob.Network);
-						break;
-					}
-				}
-				System.Diagnostics.Debug.WriteLine($"First unused receive address: {firstReceive.ToWif()}");
+
 				var hasMoneyAddress = BitcoinAddress.Create("mmVZjqZjmLvxc3YFhWqYWoe5anrWVcoJcc");
-				Assert.True(firstReceive.ToWif() != hasMoneyAddress.ToWif());
+				System.Diagnostics.Debug.WriteLine($"Checking proper balance on {hasMoneyAddress.ToWif()}");
 
-				foreach (KeyValuePair<Script, ConcurrentObservableHashSet<ScriptPubKeyHistoryRecord>> scriptPubKey in WalletJob.SafeHistory)
-				{
-					if (scriptPubKey.Key == hasMoneyAddress.ScriptPubKey)
-					{
-						var record = scriptPubKey.Value.FirstOrDefault();
-						Assert.True(record != default(ScriptPubKeyHistoryRecord));
+				var record = WalletJob.GetSafeHistory().FirstOrDefault();
+				Assert.True(record != default(SafeHistoryRecord));
 
-						Assert.True(record.Confirmed);
-						Assert.True(record.Amount == new Money(0.1m, MoneyUnit.BTC));
-						DateTimeOffset expTime;
-						DateTimeOffset.TryParse("2017.03.06. 16:47:15 +00:00", out expTime);
-						Assert.True(record.TimeStamp == expTime);
-						Assert.True(record.TransactionId ==
-									new uint256("50898694f281ed059fa6b9d37ccf099ab261540be14fd43ce1a6d6684fbd4e94"));
-						break;
-					}
-				}
+				Assert.True(record.Confirmed);
+				Assert.True(record.Amount == new Money(0.1m, MoneyUnit.BTC));
+				DateTimeOffset expTime;
+				DateTimeOffset.TryParse("2017.03.06. 16:47:15 +00:00", out expTime);
+				Assert.True(record.TimeStamp == expTime);
+				Assert.True(record.TransactionId == new uint256("50898694f281ed059fa6b9d37ccf099ab261540be14fd43ce1a6d6684fbd4e94"));
 			}
 			finally
 			{
@@ -255,7 +235,8 @@ namespace HBitcoin.Tests
 
 			// create walletjob
 			WalletJob.Init(safe);
-			var synced = false;
+			var syncedOnce = false;
+			var syncingBlocksStarted = false;
 			// note some event
 			WalletJob.ConnectedNodeCountChanged += delegate
 			{
@@ -269,12 +250,18 @@ namespace HBitcoin.Tests
 			WalletJob.StateChanged += delegate
 			{
 				System.Diagnostics.Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
+
+				if (WalletJob.State == WalletState.SyncingBlocks)
+				{
+					syncingBlocksStarted = true;
+				}
+
 				if (WalletJob.State == WalletState.SyncingMempool)
 				{
-					synced = true;
+					syncedOnce = true;
 				}
 			};
-
+			
 			// start syncing
 			var cts = new CancellationTokenSource();
 			var walletJobTask = WalletJob.StartAsync(cts.Token);
@@ -282,41 +269,45 @@ namespace HBitcoin.Tests
 
 			try
 			{
-				// wait until fully synced
+				while (!syncingBlocksStarted)
+				{
+					Task.Delay(1000).Wait();
+				}
+				ReportFullHistory();
 
-				while (!synced)
+				// wait until fully synced
+				while (!syncedOnce)
 				{
 					Task.Delay(1000).Wait();
 				}
 
-				System.Diagnostics.Debug.WriteLine("");
-				System.Diagnostics.Debug.WriteLine("---------------------------------------------------------------------------");
-				System.Diagnostics.Debug.WriteLine(@"Date			Amount		Confirmed	Transaction Id");
-				System.Diagnostics.Debug.WriteLine("---------------------------------------------------------------------------");
-				List<ScriptPubKeyHistoryRecord> records = new List<ScriptPubKeyHistoryRecord>();
-
-				foreach (KeyValuePair<Script, ConcurrentObservableHashSet<ScriptPubKeyHistoryRecord>> scriptPubKeyHistory in WalletJob.SafeHistory)
-				{
-					if (scriptPubKeyHistory.Value.Count > 0)
-					{
-						foreach(var record in scriptPubKeyHistory.Value)
-						{
-							records.Add(record);
-						}
-					}
-				}
-				foreach(var record in records.OrderBy(x => x.TimeStamp))
-				{
-					System.Diagnostics.Debug.WriteLine($@"{record.TimeStamp.DateTime}	{record.Amount}	{record.Confirmed}		{record.TransactionId}");
-				}
-
-				System.Diagnostics.Debug.WriteLine("");
+				ReportFullHistory();
 			}
 			finally
 			{
 				cts.Cancel();
 				Task.WhenAll(reportTask, walletJobTask).Wait();
 			}
+		}
+
+		private static void ReportFullHistory()
+		{
+			if(!WalletJob.GetSafeHistory().Any())
+			{
+				System.Diagnostics.Debug.WriteLine("Wallet has no history...");
+				return;
+			}
+
+			System.Diagnostics.Debug.WriteLine("");
+			System.Diagnostics.Debug.WriteLine("---------------------------------------------------------------------------");
+			System.Diagnostics.Debug.WriteLine(@"Date			Amount		Confirmed	Transaction Id");
+			System.Diagnostics.Debug.WriteLine("---------------------------------------------------------------------------");
+			
+			foreach (var record in WalletJob.GetSafeHistory())
+			{
+				System.Diagnostics.Debug.WriteLine($@"{record.TimeStamp.DateTime}	{record.Amount}	{record.Confirmed}		{record.TransactionId}");
+			}
+			System.Diagnostics.Debug.WriteLine("");
 		}
 	}
 }
