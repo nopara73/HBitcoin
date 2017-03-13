@@ -344,11 +344,57 @@ namespace HBitcoin.FullBlockSpv
 		    TracksDefaultSafe = trackDefaultSafe;
 			
 		    State = WalletState.NotStarted;
-	    }
+
+			Directory.CreateDirectory(WorkFolderPath);
+
+			Tracker.TrackedTransactions.CollectionChanged += delegate
+			{
+				UpdateSafeTracking();
+			};
+
+			_connectionParameters = new NodeConnectionParameters();
+			//So we find nodes faster
+			_connectionParameters.TemplateBehaviors.Add(new AddressManagerBehavior(AddressManager));
+			//So we don't have to load the chain each time we start
+			_connectionParameters.TemplateBehaviors.Add(new ChainBehavior(HeaderChain));
+
+			UpdateSafeTracking();
+
+			Nodes = new NodesGroup(Safe.Network, _connectionParameters,
+				new NodeRequirement
+				{
+					RequiredServices = NodeServices.Network,
+					MinVersion = ProtocolVersion.SENDHEADERS_VERSION
+				});
+			var bp = new NodesBlockPuller(HeaderChain, Nodes.ConnectedNodes);
+			_connectionParameters.TemplateBehaviors.Add(new NodesBlockPuller.NodesBlockPullerBehavior(bp));
+			Nodes.NodeConnectionParameters = _connectionParameters;
+			BlockPuller = (LookaheadBlockPuller)bp;
+
+			MemPoolJob.StateChanged += delegate
+			{
+				if (MemPoolJob.State == MemPoolState.WaitingForBlockchainSync)
+				{
+					State = WalletState.SyncingBlocks;
+				}
+				if (MemPoolJob.State == MemPoolState.Syncing)
+				{
+					State = WalletState.SyncingMempool;
+				}
+			};
+			MemPoolJob.TrackedTransactions.CollectionChanged += delegate
+			{
+				UpdateSafeTracking();
+			};
+
+			Nodes.ConnectedNodes.Removed += delegate { OnConnectedNodeCountChanged(); };
+			Nodes.ConnectedNodes.Added += delegate { OnConnectedNodeCountChanged(); };
+		}
 
 		#region static SafeTracking
 
-		public const int MaxCleanAddressCount = 21;
+		// BIP44 specifies default 20, altough we don't use BIP44, let's be somewhat consistent
+		public static int MaxCleanAddressCount { get; set; } = 20;
 	    private static void UpdateSafeTracking()
 		{
 			UpdateSafeTrackingByHdPathType(HdPathType.Receive);
@@ -413,51 +459,6 @@ namespace HBitcoin.FullBlockSpv
 
 		public static async Task StartAsync(CancellationToken  ctsToken)
 		{
-			Directory.CreateDirectory(WorkFolderPath);
-
-			Tracker.TrackedTransactions.CollectionChanged += delegate
-			{
-				UpdateSafeTracking();
-			};
-
-			_connectionParameters = new NodeConnectionParameters();
-			//So we find nodes faster
-			_connectionParameters.TemplateBehaviors.Add(new AddressManagerBehavior(AddressManager));
-			//So we don't have to load the chain each time we start
-			_connectionParameters.TemplateBehaviors.Add(new ChainBehavior(HeaderChain));
-
-			UpdateSafeTracking();
-
-			Nodes = new NodesGroup(Safe.Network, _connectionParameters,
-				new NodeRequirement
-				{
-					RequiredServices = NodeServices.Network,
-					MinVersion = ProtocolVersion.SENDHEADERS_VERSION
-				});
-			var bp = new NodesBlockPuller(HeaderChain, Nodes.ConnectedNodes);
-			_connectionParameters.TemplateBehaviors.Add(new NodesBlockPuller.NodesBlockPullerBehavior(bp));
-			Nodes.NodeConnectionParameters = _connectionParameters;
-			BlockPuller = (LookaheadBlockPuller)bp;
-			
-		    MemPoolJob.StateChanged += delegate
-		    {
-			    if(MemPoolJob.State == MemPoolState.WaitingForBlockchainSync)
-			    {
-				    State = WalletState.SyncingBlocks;
-			    }
-			    if(MemPoolJob.State == MemPoolState.Syncing)
-			    {
-				    State = WalletState.SyncingMempool;
-			    }
-		    };
-		    MemPoolJob.TrackedTransactions.CollectionChanged += delegate
-		    {
-				UpdateSafeTracking();
-		    };
-
-			Nodes.ConnectedNodes.Removed += delegate { OnConnectedNodeCountChanged(); };
-			Nodes.ConnectedNodes.Added += delegate { OnConnectedNodeCountChanged(); };
-
 			Nodes.Connect();
 
 			var tasks = new ConcurrentHashSet<Task>
@@ -734,7 +735,10 @@ namespace HBitcoin.FullBlockSpv
 				    return false;
 
 			    creationHeader = HeaderChain.GetBlock(height);
-			    return true;
+
+				if (creationHeader == null)
+					return false;
+				else return true;
 		    }
 		    catch
 		    {

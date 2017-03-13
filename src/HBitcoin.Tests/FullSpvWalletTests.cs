@@ -13,6 +13,8 @@ using NBitcoin;
 using Xunit;
 using Xunit.Abstractions;
 using System.Diagnostics;
+using QBitNinja.Client;
+using QBitNinja.Client.Models;
 
 namespace HBitcoin.Tests
 {
@@ -221,6 +223,7 @@ namespace HBitcoin.Tests
 			}
 		}
 
+		// test with a long time used testnet wallet, with exotic, including tumblebit transactions
 		[Fact]
 		public void RealHistoryTest()
 		{
@@ -235,9 +238,9 @@ namespace HBitcoin.Tests
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
+			WalletJob.MaxCleanAddressCount = 79;
 			WalletJob.Init(safe);
 			var syncedOnce = false;
-			var syncingBlocksStarted = false;
 			// note some event
 			WalletJob.ConnectedNodeCountChanged += delegate
 			{
@@ -251,12 +254,7 @@ namespace HBitcoin.Tests
 			WalletJob.StateChanged += delegate
 			{
 				Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
-
-				if (WalletJob.State == WalletState.SyncingBlocks)
-				{
-					syncingBlocksStarted = true;
-				}
-
+				
 				if (WalletJob.State == WalletState.SyncingMempool)
 				{
 					syncedOnce = true;
@@ -270,12 +268,6 @@ namespace HBitcoin.Tests
 
 			try
 			{
-				while (!syncingBlocksStarted)
-				{
-					Task.Delay(1000).Wait();
-				}
-				ReportFullHistory();
-				
 				// wait until fully synced
 				while (!syncedOnce)
 				{
@@ -283,12 +275,168 @@ namespace HBitcoin.Tests
 				}
 
 				ReportFullHistory();
+
+				// 0. Query all operations, grouped our used safe addresses
+				int MinUnusedKeyNum = 37;
+				Dictionary<BitcoinAddress, List<BalanceOperation>> operationsPerAddresses = QueryOperationsPerSafeAddressesAsync(new QBitNinjaClient(safe.Network), safe, MinUnusedKeyNum).Result;
+
+				Dictionary<uint256, List<BalanceOperation>> operationsPerTransactions = QBitNinjaJutsus.GetOperationsPerTransactions(operationsPerAddresses);
+
+				// 3. Create history records from the transactions
+				// History records is arbitrary data we want to show to the user
+				var txHistoryRecords = new List<Tuple<DateTimeOffset, Money, int, uint256>>();
+				foreach (var elem in operationsPerTransactions)
+				{
+					var amount = Money.Zero;
+					foreach (var op in elem.Value)
+						amount += op.Amount;
+
+					var firstOp = elem.Value.First();
+
+					txHistoryRecords
+						.Add(new Tuple<DateTimeOffset, Money, int, uint256>(
+							firstOp.FirstSeen,
+							amount,
+							firstOp.Confirmations,
+							elem.Key));
+				}
+
+				// 4. Order the records by confirmations and time (Simply time does not work, because of a QBitNinja issue)
+				var qBitHistoryRecords = txHistoryRecords
+					.OrderByDescending(x => x.Item3) // Confirmations
+					.ThenBy(x => x.Item1); // FirstSeen
+
+				var fullSpvHistoryRecords = WalletJob.GetSafeHistory();
+
+				// This won't be equal QBit doesn't show us this transaction: 2017.01.04. 16:24:49	0.00000000	True		77b10ff78aab2e41764a05794c4c464922c73f0c23356190429833ce68fd7be9
+				//Assert.Equal(qBitHistoryRecords.Count(), fullSpvHistoryRecords.Count());
+
+				HashSet<SafeHistoryRecord> qBitFoundItToo = new HashSet<SafeHistoryRecord>();
+				// Assert all record found by qbit also found by spv and they are identical
+				foreach (var record in qBitHistoryRecords)
+				{
+					// Item2 is the Amount
+					SafeHistoryRecord found = fullSpvHistoryRecords.FirstOrDefault(x => x.TransactionId == record.Item4);
+					Assert.True(found != default(SafeHistoryRecord));
+					Assert.True(found.TimeStamp.Equals(record.Item1));
+					Assert.True(found.Confirmed.Equals(record.Item3 > 0));
+					Assert.True(found.Amount.Equals(record.Item2));
+					qBitFoundItToo.Add(found);
+				}
+
+				foreach(var record in fullSpvHistoryRecords)
+				{
+					if(!qBitFoundItToo.Contains(record))
+					{
+						Assert.True(null == qBitHistoryRecords.FirstOrDefault(x => x.Item4 == record.TransactionId));
+						Debug.WriteLine($@"QBitNinja failed to find, but SPV found it: {record.TimeStamp.DateTime}	{record.Amount}	{record.Confirmed}		{record.TransactionId}");
+					}
+				}
 			}
 			finally
 			{
 				cts.Cancel();
 				Task.WhenAll(reportTask, walletJobTask).Wait();
 			}
+		}
+
+		public static async Task<Dictionary<BitcoinAddress, List<BalanceOperation>>> QueryOperationsPerSafeAddressesAsync(QBitNinjaClient client, Safe safe, int minUnusedKeys = 7, HdPathType? hdPathType = null)
+		{
+			if (hdPathType == null)
+			{
+				var t1 = QueryOperationsPerSafeAddressesAsync(client, safe, minUnusedKeys, HdPathType.Receive);
+				var t2 = QueryOperationsPerSafeAddressesAsync(client, safe, minUnusedKeys, HdPathType.Change);
+				var t3 = QueryOperationsPerSafeAddressesAsync(client, safe, minUnusedKeys, HdPathType.NonHardened);
+
+				await Task.WhenAll(t1, t2, t3).ConfigureAwait(false);
+
+				Dictionary<BitcoinAddress, List<BalanceOperation>> operationsPerReceiveAddresses = await t1.ConfigureAwait(false);
+				Dictionary<BitcoinAddress, List<BalanceOperation>> operationsPerChangeAddresses = await t2.ConfigureAwait(false);
+				Dictionary<BitcoinAddress, List<BalanceOperation>> operationsPerNonHardenedAddresses = await t3.ConfigureAwait(false);
+
+				var operationsPerAllAddresses = new Dictionary<BitcoinAddress, List<BalanceOperation>>();
+				foreach (var elem in operationsPerReceiveAddresses)
+					operationsPerAllAddresses.Add(elem.Key, elem.Value);
+				foreach (var elem in operationsPerChangeAddresses)
+					operationsPerAllAddresses.Add(elem.Key, elem.Value);
+				foreach (var elem in operationsPerNonHardenedAddresses)
+					operationsPerAllAddresses.Add(elem.Key, elem.Value);
+
+				return operationsPerAllAddresses;
+			}
+
+			var addresses = safe.GetFirstNAddresses(minUnusedKeys, hdPathType.GetValueOrDefault());
+			//var addresses = FakeData.FakeSafe.GetFirstNAddresses(minUnusedKeys);
+
+			var operationsPerAddresses = new Dictionary<BitcoinAddress, List<BalanceOperation>>();
+			var unusedKeyCount = 0;
+			foreach (var elem in await QueryOperationsPerAddressesAsync(client, addresses).ConfigureAwait(false))
+			{
+				operationsPerAddresses.Add(elem.Key, elem.Value);
+				if (elem.Value.Count == 0) unusedKeyCount++;
+			}
+
+			Debug.WriteLine($"{operationsPerAddresses.Count} {hdPathType} keys are processed.");
+
+			var startIndex = minUnusedKeys;
+			while (unusedKeyCount < minUnusedKeys)
+			{
+				addresses = new List<BitcoinAddress>();
+				for (int i = startIndex; i < startIndex + minUnusedKeys; i++)
+				{
+					addresses.Add(safe.GetAddress(i, hdPathType.GetValueOrDefault()));
+					//addresses.Add(FakeData.FakeSafe.GetAddress(i));
+				}
+				foreach (var elem in await QueryOperationsPerAddressesAsync(client, addresses).ConfigureAwait(false))
+				{
+					operationsPerAddresses.Add(elem.Key, elem.Value);
+					if (elem.Value.Count == 0) unusedKeyCount++;
+				}
+
+				Debug.WriteLine($"{operationsPerAddresses.Count} {hdPathType} keys are processed.");
+				startIndex += minUnusedKeys;
+			}
+
+			return operationsPerAddresses;
+		}
+
+		public static async Task<Dictionary<BitcoinAddress, List<BalanceOperation>>> QueryOperationsPerAddressesAsync(QBitNinjaClient client, IEnumerable<BitcoinAddress> addresses)
+		{
+			var operationsPerAddresses = new Dictionary<BitcoinAddress, List<BalanceOperation>>();
+
+			var addressList = addresses.ToList();
+			var balanceModelList = new List<BalanceModel>();
+
+			foreach (var balance in await GetBalancesAsync(client, addressList, unspentOnly: false).ConfigureAwait(false))
+			{
+				balanceModelList.Add(balance);
+			}
+
+			for (var i = 0; i < balanceModelList.Count; i++)
+			{
+				operationsPerAddresses.Add(addressList[i], balanceModelList[i].Operations);
+			}
+
+			return operationsPerAddresses;
+		}
+
+		private static async Task<IEnumerable<BalanceModel>> GetBalancesAsync(QBitNinjaClient client, IEnumerable<BitcoinAddress> addresses, bool unspentOnly)
+		{
+			var tasks = new HashSet<Task<BalanceModel>>();
+			foreach (var dest in addresses)
+			{
+				var task = client.GetBalance(dest, unspentOnly);
+
+				tasks.Add(task);
+			}
+
+			await Task.WhenAll(tasks).ConfigureAwait(false);
+
+			var results = new HashSet<BalanceModel>();
+			foreach (var task in tasks)
+				results.Add(await task.ConfigureAwait(false));
+
+			return results;
 		}
 
 		private static void ReportFullHistory()
