@@ -9,6 +9,6 @@ namespace HBitcoin.FullBlockSpv
 	{
 		NotStarted,
 		SyncingBlocks,
-		SyncingMempool // MemPool is never fully synced, it's always changing
+		Synced
 	}
 }

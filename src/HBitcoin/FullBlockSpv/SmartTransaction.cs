@@ -9,12 +9,11 @@ namespace HBitcoin.FullBlockSpv
     public class SmartTransaction: IEquatable<SmartTransaction>
 	{
 		#region Members
-
-		// -1 if not confirmed
-		public int Height { get; }
+		
+		public TransactionHeight Height { get; }
 		public Transaction Transaction { get; }
 
-		public bool Confirmed => Height != -1;
+		public bool Confirmed => Height.Type == TransactionHeightType.Chain;
 		public uint256 GetHash() => Transaction.GetHash();
 
 		#endregion
@@ -25,13 +24,8 @@ namespace HBitcoin.FullBlockSpv
 		{
 
 		}
-
-		/// <summary>
-		/// 
-		/// </summary>
-		/// <param name="transaction"></param>
-		/// <param name="height">Defaults to -1 if not confirmed</param>
-		public SmartTransaction(Transaction transaction, int height = -1)
+		
+		public SmartTransaction(Transaction transaction, TransactionHeight height)
 		{
 			Height = height;
 			Transaction = transaction;

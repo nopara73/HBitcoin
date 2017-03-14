@@ -23,24 +23,24 @@ namespace HBitcoin.Tests
 		    var tx2 =
 			    new Transaction(
 				    "0100000001c3dd09422c44e8cab3065aac65f1cc7befce2a0ea5d309d8d213ec08877dbd4b000000006a473044022001ab7769a0d735bbe4756260c30ab8127f4282cdd00b66991ca6bfc383b5005c02203d29981127717946bf05fc15177f3042aa0b995db786a868de4cc67bfd88801d0121037df55814a04730433b1ee3bcc8f089eef346e556d222b13f1a57a355fd8d07f6ffffffff0120300500000000001976a914f55586866f28d6db41529b8bd85db09e88221a1388ac00000000");
-		    Assert.True(tracker.TrackedTransactions.TryAdd(new SmartTransaction(tx1, 1)));
-			Assert.True(tracker.TrackedTransactions.TryAdd(new SmartTransaction(tx2, 1)));
-			Assert.False(tracker.TrackedTransactions.TryAdd(new SmartTransaction(tx2, 1)));
+		    Assert.True(tracker.TrackedTransactions.TryAdd(new SmartTransaction(tx1, new TransactionHeight(1))));
+			Assert.True(tracker.TrackedTransactions.TryAdd(new SmartTransaction(tx2, new TransactionHeight(1))));
+			Assert.False(tracker.TrackedTransactions.TryAdd(new SmartTransaction(tx2, new TransactionHeight(1))));
 		    
 		    HashSet<SmartTransaction> stx = new HashSet<SmartTransaction>();
-			Assert.True(stx.Add(new SmartTransaction(tx1, 1)));
-			Assert.True(stx.Add(new SmartTransaction(tx2, 2)));
-			Assert.False(stx.Add(new SmartTransaction(tx2, 3)));
+			Assert.True(stx.Add(new SmartTransaction(tx1, new TransactionHeight(1))));
+			Assert.True(stx.Add(new SmartTransaction(tx2, new TransactionHeight(2))));
+			Assert.False(stx.Add(new SmartTransaction(tx2, new TransactionHeight(3))));
 
 			ConcurrentHashSet<SmartTransaction> stxchs = new ConcurrentHashSet<SmartTransaction>();
-			Assert.True(stxchs.Add(new SmartTransaction(tx1, 1)));
-			Assert.True(stxchs.Add(new SmartTransaction(tx2, 2)));
-			Assert.False(stxchs.Add(new SmartTransaction(tx2, 3)));
+			Assert.True(stxchs.Add(new SmartTransaction(tx1, new TransactionHeight(1))));
+			Assert.True(stxchs.Add(new SmartTransaction(tx2, new TransactionHeight(2))));
+			Assert.False(stxchs.Add(new SmartTransaction(tx2, new TransactionHeight(3))));
 
 			ConcurrentObservableHashSet<SmartTransaction> stxcohs = new ConcurrentObservableHashSet<SmartTransaction>();
-			Assert.True(stxcohs.TryAdd(new SmartTransaction(tx1, 1)));
-			Assert.True(stxcohs.TryAdd(new SmartTransaction(tx2, 2)));
-			Assert.False(stxcohs.TryAdd(new SmartTransaction(tx2, 3)));
+			Assert.True(stxcohs.TryAdd(new SmartTransaction(tx1, new TransactionHeight(1))));
+			Assert.True(stxcohs.TryAdd(new SmartTransaction(tx2, new TransactionHeight(2))));
+			Assert.False(stxcohs.TryAdd(new SmartTransaction(tx2, new TransactionHeight(3))));
 		}
 
 	    [Fact]

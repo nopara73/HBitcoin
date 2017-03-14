@@ -140,7 +140,7 @@ namespace HBitcoin.FullBlockSpv
 				// todo: the mempool could note when it seen the transaction the first time
 				record.TimeStamp = !transaction.Confirmed
 					? DateTimeOffset.UtcNow
-					: HeaderChain.GetBlock(transaction.Height).Header.BlockTime;
+					: HeaderChain.GetBlock(transaction.Height.Value).Header.BlockTime;
 
 				record.Amount = Money.Zero; //for now
 
@@ -371,24 +371,24 @@ namespace HBitcoin.FullBlockSpv
 			Nodes.NodeConnectionParameters = _connectionParameters;
 			BlockPuller = (LookaheadBlockPuller)bp;
 
-			MemPoolJob.StateChanged += delegate
-			{
-				if (MemPoolJob.State == MemPoolState.WaitingForBlockchainSync)
-				{
-					State = WalletState.SyncingBlocks;
-				}
-				if (MemPoolJob.State == MemPoolState.Syncing)
-				{
-					State = WalletState.SyncingMempool;
-				}
-			};
-			MemPoolJob.TrackedTransactions.CollectionChanged += delegate
-			{
-				UpdateSafeTracking();
-			};
+		    MemPoolJob.Synced += delegate
+		    {
+			    State = WalletState.Synced;
+		    };
+
+			MemPoolJob.NewTransaction += MemPoolJob_NewTransaction;
 
 			Nodes.ConnectedNodes.Removed += delegate { OnConnectedNodeCountChanged(); };
 			Nodes.ConnectedNodes.Added += delegate { OnConnectedNodeCountChanged(); };
+		}
+
+		private static void MemPoolJob_NewTransaction(object sender, NewTransactionEventArgs e)
+		{
+			if(
+				Tracker.ProcessTransaction(new SmartTransaction(e.Transaction, new TransactionHeight(TransactionHeightType.MemPool))))
+			{
+				UpdateSafeTracking();
+			}
 		}
 
 		#region static SafeTracking
@@ -412,40 +412,18 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-		private static void UpdateSafeTrackingByPath(HdPathType hdPathType, SafeAccount acccount = null)
+		private static void UpdateSafeTrackingByPath(HdPathType hdPathType, SafeAccount account = null)
 		{
 			int i = 0;
 			var cleanCount = 0;
 			while (true)
 			{
-				Script scriptPubkey = acccount == null ? Safe.GetAddress(i, hdPathType).ScriptPubKey : Safe.GetAddress(i, hdPathType, acccount).ScriptPubKey;
+				Script scriptPubkey = account == null ? Safe.GetAddress(i, hdPathType).ScriptPubKey : Safe.GetAddress(i, hdPathType, account).ScriptPubKey;
 
-				Tracker.Track(scriptPubkey);
+				Tracker.TrackedScriptPubKeys.Add(scriptPubkey);
 
-				// if didn't find in the chain, it's clean
-				bool clean = Tracker.IsClean(scriptPubkey);
-
-				// if still clean look in mempool
-				if(clean)
-				{
-					// if found in mempool it's not clean
-					if(MemPoolJob.State == MemPoolState.Syncing)
-					{
-						foreach(var tx in MemPoolJob.TrackedTransactions)
-						{
-							foreach(var output in tx.Outputs)
-							{
-								if(output.ScriptPubKey.Equals(scriptPubkey))
-								{
-									clean = false;
-								}
-							}
-						}
-					}
-				}
-
-				// if clean we found a clean, elevate cleancount and if max reached don't look for more
-				if(clean)
+				// if clean elevate cleancount and if max reached don't look for more
+				if(Tracker.IsClean(scriptPubkey))
 				{
 					cleanCount++;
 					if (cleanCount > MaxCleanAddressCount) return;
@@ -489,7 +467,7 @@ namespace HBitcoin.FullBlockSpv
 			receivedTransactions = new HashSet<SmartTransaction>();
 			spentTransactions = new HashSet<SmartTransaction>();
 			
-			foreach (var tx in GetAllChainAndMemPoolTransactions())
+			foreach (var tx in Tracker.TrackedTransactions)
 			{
 				// if already has that tx continue
 				if (receivedTransactions.Any(x => x.GetHash() == tx.GetHash()))
@@ -507,7 +485,7 @@ namespace HBitcoin.FullBlockSpv
 
 		    if(found)
 		    {
-			    foreach(var tx in GetAllChainAndMemPoolTransactions())
+			    foreach(var tx in Tracker.TrackedTransactions)
 			    {
 				    // if already has that tx continue
 				    if(spentTransactions.Any(x => x.GetHash() == tx.GetHash()))
@@ -525,33 +503,6 @@ namespace HBitcoin.FullBlockSpv
 		    }
 
 		    return found;
-		}
-
-		/// <summary>
-		/// 
-		/// </summary>
-		/// <returns>int: block height, -1 if mempool</returns>
-		public static HashSet<SmartTransaction> GetAllChainAndMemPoolTransactions()
-		{
-			var transactions = new HashSet<SmartTransaction>();
-
-			foreach (var tx in Tracker.TrackedTransactions)
-			{
-				if (tx.Confirmed)
-				{
-					transactions.Add(tx);
-				}
-				else
-				{
-					Transaction foundTransaction = MemPoolJob.TrackedTransactions.FirstOrDefault(x => x.GetHash() == tx.GetHash());
-					if(foundTransaction != default(Transaction))
-					{
-						transactions.Add(tx);
-					}
-				}
-			}
-
-			return transactions;
 		}
 
 		#region BlockPulling
@@ -762,5 +713,140 @@ namespace HBitcoin.FullBlockSpv
 				return false;
 		    }
 	    }
-    }
+
+		#region TransactionSending
+
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="transaction"></param>
+		/// <param name="failingReason">If doesn't fail then empty string</param>
+		/// <returns>true if success</returns>
+		public static async Task<BuildTransactionResult> BuildTransactionAsync(BitcoinAddress addressToSend, SafeAccount account = null, bool allowUnconfirmed = false)
+		{
+			try
+			{
+				AssertAccount(account);
+
+				// 1. Find all coins I can spend from the account
+				Debug.WriteLine("Finding all unspent coins...");
+				IDictionary<ICoin, bool> unspentCoins = GetUnspentCoins(account, allowUnconfirmed);
+
+				// 2. Get the script pubkey of the change.
+				Debug.WriteLine("Select change address...");
+				Script changeScriptPubKey;
+				int i = 0;
+				while (true)
+				{
+					Script scriptPubkey = account == null ? Safe.GetAddress(i, HdPathType.Change).ScriptPubKey : Safe.GetAddress(i, HdPathType.Change, account).ScriptPubKey;
+					if (Tracker.IsClean(scriptPubkey))
+					{
+						changeScriptPubKey = scriptPubkey;
+						break;
+					}
+					i++;
+				}
+
+				// 3. How much money we can spend?
+				Debug.WriteLine("Calculating available amount...");
+				var availableAmount = Money.Zero;
+				var unconfirmedAvailableAmount = Money.Zero;
+				foreach (var elem in unspentCoins)
+				{
+					// If can spend unconfirmed add all
+					if (allowUnconfirmed)
+					{
+						availableAmount += elem.Key.Amount as Money;
+						if (!elem.Value)
+							unconfirmedAvailableAmount += elem.Key.Amount as Money;
+					}
+					// else only add confirmed ones
+					else
+					{
+						if (elem.Value)
+						{
+							availableAmount += elem.Key.Amount as Money;
+						}
+					}
+				}
+
+				throw new NotImplementedException();
+
+				return new BuildTransactionResult
+				{
+					Success = true
+				};
+			}
+			catch(Exception ex)
+			{
+				return new BuildTransactionResult
+				{
+					Success = false,
+					FailingReason = ex.ToString()
+				};
+			}
+		}
+		public struct BuildTransactionResult
+		{
+			public bool Success;
+			public string FailingReason;
+			public Transaction Transaction;
+			public bool SpendsUnconfirmed;
+		}
+
+		/// <summary>
+		/// Find all unspent transaction output of the account
+		/// </summary>
+		public static IDictionary<ICoin, bool> GetUnspentCoins(SafeAccount account = null, bool allowUnconfirmed = false)
+		{
+			AssertAccount(account);
+
+			var unspentCoins = new Dictionary<ICoin, bool>();
+
+			var trackedScriptPubkeys = GetTrackedScriptPubKeysBySafeAccount(account);
+
+			// 1. Go through all the transactions and their outputs
+			foreach(SmartTransaction tx in Tracker
+				.TrackedTransactions
+				.Where(x => 
+				(allowUnconfirmed || x.Confirmed) 
+				&& x.Height.Type != TransactionHeightType.NotPropagated))
+			{
+				foreach(var coin in tx.Transaction.Outputs.AsCoins())
+				{
+					// 2. Check if the coin comes with our account
+					if(trackedScriptPubkeys.Contains(coin.ScriptPubKey))
+					{
+						// 3. Check if coin is unspent, if so add to our utxoSet
+						if(IsUnspent(coin))
+						{
+							unspentCoins.Add(coin, tx.Confirmed);
+						}
+					}
+				}
+			}
+
+			return unspentCoins;
+		}
+
+		private static bool IsUnspent(ICoin coin) => Tracker
+			.TrackedTransactions
+			.Where(x => x.Height.Type == TransactionHeightType.Chain || x.Height.Type == TransactionHeightType.MemPool)
+			.SelectMany(x => x.Transaction.Inputs)
+			.All(txin => txin.PrevOut != coin.Outpoint);
+
+		public static async Task<SendTransactionResult> SendTransactionAsync(Transaction transaction)
+		{
+			// After you send add it to the trackedtransactions so immediate transaction building get more accurate outputs
+			throw new NotImplementedException();
+		}
+
+		public struct SendTransactionResult
+		{
+			public bool Success;
+			public string FailingReason;
+		}
+
+		#endregion
+	}
 }

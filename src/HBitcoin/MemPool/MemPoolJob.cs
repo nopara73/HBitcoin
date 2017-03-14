@@ -1,200 +1,109 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ConcurrentCollections;
 using HBitcoin.FullBlockSpv;
 using NBitcoin;
-using NBitcoin.Protocol;
 
 namespace HBitcoin.MemPool
 {
-	public static class MemPoolJob
+	public class NewTransactionEventArgs : EventArgs
 	{
-		private static MemPoolState _state = MemPoolState.NotStarted;
+		public Transaction Transaction { get; }
 
-		public static MemPoolState State
+		public NewTransactionEventArgs(Transaction transaction)
 		{
-			get { return _state; }
-			private set
-			{
-				if(_state == value) return;
-				_state = value;
-				OnStateChanged();
-			}
+			Transaction = transaction;
 		}
-		public static event EventHandler StateChanged;
-		private static void OnStateChanged() => StateChanged?.Invoke(null, EventArgs.Empty);
+	}
+	public class MemPoolJob
+    {
+	    public static ConcurrentHashSet<uint256> Transactions = new ConcurrentHashSet<uint256>();
 
-		public static ConcurrentObservableHashSet<Transaction> TrackedTransactions = new ConcurrentObservableHashSet<Transaction>();
-
-		public static ConcurrentHashSet<Transaction> Transactions { get; private set; } = new ConcurrentHashSet<Transaction>();
+		public static event EventHandler<NewTransactionEventArgs> NewTransaction;
+		private static void OnNewTransaction(Transaction transaction) => NewTransaction?.Invoke(null, new NewTransactionEventArgs(transaction));
+		
+		public static bool _Synced = false;
+		public static event EventHandler Synced;
+		private static void OnSynced() => Synced?.Invoke(null, EventArgs.Empty);
 
 		public static async Task StartAsync(CancellationToken ctsToken)
 		{
-#pragma warning disable 4014
-			ClearTransactionsWhenConfirmationJobAsync(ctsToken);
-#pragma warning restore 4014
-
 			while (true)
 			{
 				try
 				{
 					if(ctsToken.IsCancellationRequested)
 					{
-						Transactions.Clear();
-						State = MemPoolState.NotStarted;
 						return;
 					}
 
 					if(WalletJob.Nodes.ConnectedNodes.Count <= 3 || !WalletJob.ChainsInSync)
 					{
-						State = MemPoolState.WaitingForBlockchainSync;
 						await Task.Delay(100, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
 						continue;
 					}
 
-					State = MemPoolState.Syncing;
+					var txidsWeAlreadyHadAndFound = new HashSet<uint256>();
 
-					_confirmationHappening = false;
-					ConcurrentHashSet<Task> tasks = new ConcurrentHashSet<Task> {Task.CompletedTask};
 					foreach(var node in WalletJob.Nodes.ConnectedNodes)
 					{
-						tasks.Add(FillTransactionsAsync(node, ctsToken));
+						if(ctsToken.IsCancellationRequested) return;
+						if(!node.IsConnected) continue;
+
+
+						var txidsWeNeed = new HashSet<uint256>();
+						foreach(var txid in await Task.Run(() => node.GetMempool(ctsToken)).ConfigureAwait(false))
+						{
+							// if we had it in prevcycle note we found it again
+							if(Transactions.Contains(txid)) txidsWeAlreadyHadAndFound.Add(txid);
+							// if we didn't have it in prevcicle note we need it
+							else txidsWeNeed.Add(txid);
+						}
+
+						var txIdsPieces = Util.Split(txidsWeNeed.ToArray(), 500);
+
+						if(ctsToken.IsCancellationRequested) continue;
+						if(!node.IsConnected) continue;
+
+						foreach(var txIdsPiece in txIdsPieces)
+						{
+							foreach(
+								var tx in
+								await Task.Run(() => node.GetMempoolTransactions(txIdsPiece.ToArray(), ctsToken)).ConfigureAwait(false))
+							{
+								if(!node.IsConnected) continue;
+								if(ctsToken.IsCancellationRequested) continue;
+
+								// note we found it and add to unprocessed
+								if(txidsWeAlreadyHadAndFound.Add(tx.GetHash()))
+									OnNewTransaction(tx);
+							}
+						}
 					}
 
-					await Task.WhenAll(tasks).ConfigureAwait(false);
+					// Clear the transactions from the previous cycle
+					Transactions = new ConcurrentHashSet<uint256>(txidsWeAlreadyHadAndFound);
+
+					if(!_Synced)
+					{
+						_Synced = true;
+						OnSynced();
+					}
 
 					await Task.Delay(1000, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
 				}
-				catch(Exception ex)
+				catch(OperationCanceledException)
+				{
+					continue;
+				}
+				catch (Exception ex)
 				{
 					System.Diagnostics.Debug.WriteLine($"Ignoring {nameof(MemPoolJob)} exception:");
 					System.Diagnostics.Debug.WriteLine(ex);
 				}
-			}
-		}
-
-		private static bool _confirmationHappening = false;
-		private static int _lastSeenBlockHeight = 0;
-		private static async Task ClearTransactionsWhenConfirmationJobAsync(CancellationToken ctsToken)
-		{
-			while(true)
-			{
-				if(ctsToken.IsCancellationRequested) return;
-
-				while(_confirmationHappening)
-				{
-					if (ctsToken.IsCancellationRequested) return;
-					await Task.Delay(10, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
-				}
-
-				var currentBlockHeight = WalletJob.BestHeight;
-				if(_lastSeenBlockHeight == currentBlockHeight) continue;
-				if(_lastSeenBlockHeight == 0) _lastSeenBlockHeight = currentBlockHeight;
-				else _lastSeenBlockHeight++;
-				_confirmationHappening = true;
-				Transactions.Clear();
-
-				// a block just confirmed, take out the ones we are concerned
-				if (TrackedTransactions.Count == 0) continue;
-				if(WalletJob.Tracker.TrackedTransactions.Count == 0) continue;
-				IEnumerable<SmartTransaction> justConfirmedTransactions;
-				try
-				{
-					justConfirmedTransactions = WalletJob.Tracker.TrackedTransactions
-						.Where(x => x.Height.Equals(_lastSeenBlockHeight));
-				}
-				catch(ArgumentNullException)
-				{
-					continue;
-				}
-				
-				foreach(var tx in justConfirmedTransactions)
-				{
-					foreach(var ttx in TrackedTransactions)
-					{
-						if (tx.GetHash().Equals(ttx.GetHash()))
-							TrackedTransactions.TryRemove(ttx);
-					}
-				}
-
-				await Task.Delay(10, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
-			}
-		}
-
-		private static async Task FillTransactionsAsync(Node node, CancellationToken ctsToken)
-			=> await Task.Run(() => FillTransactions(node, ctsToken)).ConfigureAwait(false);
-
-		private static void FillTransactions(Node node, CancellationToken ctsToken)
-		{
-			if (ctsToken.IsCancellationRequested) return;
-
-			try
-			{
-				if (!node.IsConnected) return;
-				uint256[] txIds = node.GetMempool(ctsToken);
-				if(ctsToken.IsCancellationRequested) return;
-
-				var txIdsPieces = Util.Split(txIds, 500);
-				foreach(var txIdsPiece in txIdsPieces)
-				{
-					if (!node.IsConnected) return;
-					foreach (var tx in node.GetMempoolTransactions(txIdsPiece.ToArray(), ctsToken))
-					{
-						if(_confirmationHappening) return;
-						if(ctsToken.IsCancellationRequested) return;
-
-						Transactions.Add(tx);
-
-						// todo handle malleated transactions
-						// todo handle transactions those are dropping out of the mempool
-						// if we track it, then add
-						// only if -1 it's not confirmed or present
-						IEnumerable<SmartTransaction> awaitedTransactions = WalletJob.Tracker.TrackedTransactions.Where(x => !x.Confirmed);
-						// if we are interested in the tx
-						if(awaitedTransactions.Select(x=>x.GetHash()).Contains(tx.GetHash()))
-						{
-							var alreadyTrackedTxids = TrackedTransactions.Select(x => x.GetHash());
-							// if not already tracking the track
-							if(!alreadyTrackedTxids.Contains(tx.GetHash()))
-							{
-								TrackedTransactions.TryAdd(tx);
-							}
-						}
-
-						foreach(var spk in tx.Outputs.Select(x => x.ScriptPubKey))
-						{
-							// if we are tracking that scriptpubkey
-							if(WalletJob.Tracker.TrackedScriptPubKeys.Contains(spk))
-							{
-								var alreadyTrackedTxids = TrackedTransactions.Select(x => x.GetHash());
-								// if not already tracking the transaction the track
-								if(!alreadyTrackedTxids.Contains(tx.GetHash()))
-								{
-									TrackedTransactions.TryAdd(tx);
-								}
-							}
-						}
-					}
-				}
-			}
-			catch(OperationCanceledException)
-			{
-				return;
-			}
-			catch (InvalidOperationException)
-			{
-				return;
-			}
-			catch (Exception)
-			{
-				if (ctsToken.IsCancellationRequested) return;
-
-				throw;
 			}
 		}
 	}

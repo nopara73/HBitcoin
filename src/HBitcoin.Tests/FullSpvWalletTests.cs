@@ -61,20 +61,14 @@ namespace HBitcoin.Tests
 			WalletJob.StateChanged += delegate
 			{
 				Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
-				if(WalletJob.State == WalletState.SyncingMempool)
+				if(WalletJob.State == WalletState.Synced)
 				{
 					synced = true;
 				}
 			};
 			Assert.True(WalletJob.SafeAccounts.Count == 0);
 			Assert.True(WalletJob.ConnectedNodeCount == 0);
-			if(WalletJob.CreationHeight != -1)
-			{
-				ChainedBlock creationHeader;
-				if(WalletJob.TryGetHeader(WalletJob.CreationHeight, out creationHeader))
-					Assert.True(creationHeader.Header.BlockTime >= Safe.EarliestPossibleCreationTime);
-			}
-			var allTxCount = WalletJob.GetAllChainAndMemPoolTransactions().Count;
+			var allTxCount = WalletJob.Tracker.TrackedTransactions.Count;
 			Assert.True(allTxCount == 0);
 			Assert.True(!WalletJob.GetSafeHistory().Any());
 			Assert.True(WalletJob.State == WalletState.NotStarted);
@@ -99,9 +93,9 @@ namespace HBitcoin.Tests
 					Task.Delay(1000).Wait();
 				}
 
-				Assert.True(WalletJob.State == WalletState.SyncingMempool);
+				Assert.True(WalletJob.State == WalletState.Synced);
 				Assert.True(WalletJob.CreationHeight != -1);
-				Assert.True(WalletJob.GetAllChainAndMemPoolTransactions().Count == 0);
+				Assert.True(WalletJob.Tracker.TrackedTransactions.Count == 0);
 				Assert.True(!WalletJob.GetSafeHistory().Any());
 				int headerHeight;
 				Assert.True(WalletJob.TryGetHeaderHeight(out headerHeight));
@@ -183,7 +177,7 @@ namespace HBitcoin.Tests
 			WalletJob.StateChanged += delegate
 			{
 				Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
-				if(WalletJob.State == WalletState.SyncingMempool)
+				if(WalletJob.State == WalletState.Synced)
 				{
 					synced = true;
 				}
@@ -255,7 +249,7 @@ namespace HBitcoin.Tests
 			{
 				Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
 				
-				if (WalletJob.State == WalletState.SyncingMempool)
+				if (WalletJob.State == WalletState.Synced)
 				{
 					syncedOnce = true;
 				}
@@ -323,7 +317,7 @@ namespace HBitcoin.Tests
 					Assert.True(found.Amount.Equals(record.Item2));
 					qBitFoundItToo.Add(found);
 				}
-
+				
 				foreach(var record in fullSpvHistoryRecords)
 				{
 					if(!qBitFoundItToo.Contains(record))

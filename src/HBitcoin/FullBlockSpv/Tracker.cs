@@ -74,19 +74,8 @@ namespace HBitcoin.FullBlockSpv
 		/// 
 		/// </summary>
 		/// <param name="scriptPubKey"></param>
-		/// <returns>if haven't got any fund yet</returns>
-		public bool IsClean(Script scriptPubKey)
-		{
-			foreach(var tx in TrackedTransactions.Where(x => x.Confirmed))
-			{
-				if(tx.Transaction.Outputs.Any(output => output.ScriptPubKey.Equals(scriptPubKey)))
-				{
-					return false;
-				}
-			}
-
-			return true;
-		}
+		/// <returns>if never had any money on it</returns>
+		public bool IsClean(Script scriptPubKey) => TrackedTransactions.All(tx => !tx.Transaction.Outputs.Any(output => output.ScriptPubKey.Equals(scriptPubKey)));
 
 	    public ConcurrentObservableHashSet<SmartTransaction> TrackedTransactions { get; }
 			= new ConcurrentObservableHashSet<SmartTransaction>();
@@ -115,30 +104,6 @@ namespace HBitcoin.FullBlockSpv
 		#endregion
 
 		#region Tracking
-
-	    public void Track(SmartTransaction transaction)
-	    {
-			// if confirmed try to find unconfirmed and remove it
-		    if(transaction.Confirmed)
-		    {
-			    foreach(var ttx in TrackedTransactions.Where(x => !x.Confirmed))
-			    {
-				    if(ttx.GetHash() == transaction.GetHash())
-				    {
-					    TrackedTransactions.TryRemove(ttx);
-					    break;
-				    }
-			    }
-		    }
-
-		    TrackedTransactions.TryAdd(transaction);
-		}
-
-		/// <param name="scriptPubKey">BitcoinAddress.ScriptPubKey</param>
-		public void Track(Script scriptPubKey)
-		{
-			TrackedScriptPubKeys.Add(scriptPubKey);
-		}
 
 		private IEnumerable<SmartTransaction> GetNotYetFoundTrackedTransactions()
 		{
@@ -171,118 +136,97 @@ namespace HBitcoin.FullBlockSpv
 		    UnprocessedBlockBuffer.TryAddOrReplace(height, block);
 	    }
 
-	    private void ProcessBlock(int height, Block block)
-		{
-			HashSet<uint256> justFoundTransactions = new HashSet<uint256>();
+		#region TransactionProcessing
 
+		/// <returns>if processed it transaction</returns>
+		public bool ProcessTransaction(SmartTransaction transaction)
+	    {
+			// 1. If already tracking can we update it?
+		    var found = TrackedTransactions.FirstOrDefault(x => x == transaction);
+			if (found != default(SmartTransaction))
+		    {
+				// if in a lower level don't track
+			    if(found.Height.Type <= transaction.Height.Type)
+				    return false;
+			    else
+			    {
+					// else update
+					TrackedTransactions.TryRemove(transaction);
+					TrackedTransactions.TryAdd(transaction);
+					return true;
+				}
+		    }
+
+			// 2. If this transaction arrived to any of our scriptpubkey track it!
+			if (transaction.Transaction.Outputs.Any(output => TrackedScriptPubKeys.Contains(output.ScriptPubKey)))
+			{
+				TrackedTransactions.TryAdd(transaction);
+				return true;
+			}
+
+			// 3. If this transaction spends any of our scriptpubkeys track it!
+		    if(transaction.Transaction.Inputs.Any(input => TrackedTransactions
+			    .Where(ttx => ttx.GetHash() == input.PrevOut.Hash)
+			    .Any(ttx => TrackedScriptPubKeys
+				    .Contains(ttx.Transaction.Outputs[input.PrevOut.N].ScriptPubKey))))
+		    {
+			    TrackedTransactions.TryAdd(transaction);
+			    return true;
+		    }
+
+			// if got so far we are not interested
+			return false;
+		}
+
+		/// <returns>transactions it processed, empty if not processed any</returns>
+		private HashSet<SmartTransaction> ProcessTransactions(IEnumerable<Transaction> transactions, TransactionHeight height)
+		{
+			var processedTransactions = new HashSet<SmartTransaction>();
 			try
 			{
-				// 1. Look for transactions, related to our scriptpubkeys
-				foreach (var tx in block.Transactions)
+				// Process all transactions
+				foreach(var tx in transactions)
 				{
-					// if any transaction arrived to any of our scriptpubkey
-					if (tx.Outputs.Any(output => TrackedScriptPubKeys.Contains(output.ScriptPubKey)))
+					var smartTx = new SmartTransaction(tx, height);
+					if(ProcessTransaction(smartTx))
 					{
-						Track(new SmartTransaction(tx, height));
-						justFoundTransactions.Add(tx.GetHash());
-					}
-
-					// if any transaction spends any of our scriptpubkey
-					if(tx.Inputs.Any(input => TrackedTransactions
-						.Where(ttx => ttx.GetHash() == input.PrevOut.Hash)
-						.Any(ttx => TrackedScriptPubKeys
-							.Contains(ttx.Transaction.Outputs[input.PrevOut.N].ScriptPubKey))))
-					{
-						Track(new SmartTransaction(tx, height));
-						justFoundTransactions.Add(tx.GetHash());
+						processedTransactions.Add(smartTx);
 					}
 				}
 
-				// 2. Look for transactions, we are waiting to confirm
-				var notYetFoundTrackedTransactions = GetNotYetFoundTrackedTransactions();
-			
-				foreach (var smartTransaction in notYetFoundTrackedTransactions)
+				// If processed any then do it again recursively until zero new is processed
+				if(processedTransactions.Count > 0)
 				{
-					if (block.Transactions.Any(x => x.GetHash().Equals(smartTransaction.GetHash())))
+					var newlyProcessedTransactions = ProcessTransactions(transactions, height);
+					foreach(var ptx in newlyProcessedTransactions)
 					{
-						justFoundTransactions.Add(smartTransaction.GetHash());
+						processedTransactions.Add(ptx);
 					}
-				}
-
-				// 3. Look for transactions, those are spending any of our transactions
-				foreach(var smartTransaction in TrackedTransactions)
-				{
-					foreach(var tx in block.Transactions)
-					{
-						foreach(var input in tx.Inputs)
-						{
-							try
-							{
-								if(input.PrevOut.Hash == smartTransaction.GetHash())
-								{
-									justFoundTransactions.Add(smartTransaction.GetHash());
-								}
-							}
-							catch
-							{
-								// this tx is strange, maybe this never happens, whatever
-							}
-						}
-					}
-				}
-
-				// if found transactions try to find one that spends it until (recursively)
-				HashSet<SmartTransaction> spendsthem = new HashSet<SmartTransaction>();
-				foreach (var hash in justFoundTransactions)
-				{
-					foreach(var ttx in TrackIfSomethingThatSpendsTransactionRecursively(hash, block, height))
-					{
-						spendsthem.Add(ttx);
-					}
-				}
-				foreach(var tx in spendsthem)
-				{
-					justFoundTransactions.Add(tx.GetHash());
 				}
 			}
-			catch(Exception ex)
+			catch (Exception ex)
 			{
 				Debug.WriteLine($"Ignoring {nameof(ProcessBlock)} exception at height {height}:");
 				Debug.WriteLine(ex);
 			}
 
-			var smartMerkleBlock = new SmartMerkleBlock(height, block, justFoundTransactions.ToArray());
-			MerkleChain.Add(smartMerkleBlock);
+			return processedTransactions;
 		}
 
-	    private IEnumerable<SmartTransaction> TrackIfSomethingThatSpendsTransactionRecursively(uint256 txid, Block block, int height)
-	    {
-		    var found = new HashSet<SmartTransaction>();
+		/// <returns>transactions it processed, empty if not processed any</returns>
+		private HashSet<SmartTransaction> ProcessBlock(int height, Block block)
+		{
+			var foundTransactions = ProcessTransactions(block.Transactions, new TransactionHeight(height));
 
-		    foreach(Transaction tx in block.Transactions)
-		    {
-			    foreach(var input in tx.Inputs)
-			    {
-				    if(input.PrevOut.Hash == txid)
-				    {
-					    // track
-					    Track(new SmartTransaction(tx, height));
-					    // add to found
-					    found.Add(new SmartTransaction(tx, height));
-					    // recursively go through it too
-					    foreach(var spendit in TrackIfSomethingThatSpendsTransactionRecursively(tx.GetHash(), block, height))
-					    {
-						    found.Add(spendit);
-					    }
-				    }
-			    }
-		    }
+			var smartMerkleBlock = new SmartMerkleBlock(height, block, foundTransactions.Select(x => x.GetHash()).ToArray());
+			MerkleChain.Add(smartMerkleBlock);
 
-			return found;
-	    }
+			return foundTransactions;
+		}
 
+		#endregion
 
-	    private void UnprocessedBlockBuffer_HaveBlocks(object sender, EventArgs e)
+		private void UnprocessedBlockBuffer_HaveBlocks(object sender, EventArgs e)
 		{
 			int height;
 			Block block;
@@ -379,7 +323,8 @@ namespace HBitcoin.FullBlockSpv
 					foreach (var line in File.ReadAllLines(tt))
 					{
 						var pieces = line.Split(':');
-						Track(new SmartTransaction(new Transaction(pieces[0]), int.Parse(pieces[1])));
+						var height = int.Parse(pieces[1]);
+						TrackedTransactions.TryAdd(new SmartTransaction(new Transaction(pieces[0]), new TransactionHeight(height)));
 					}
 				}
 

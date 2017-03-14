@@ -30,7 +30,7 @@ namespace HBitcoin.KeyManagement
 				case HdPathType.NonHardened:
 					return "3";
 				case HdPathType.Account:
-					return "4'";  // special
+					return "4'"; // special
 				default:
 					throw new ArgumentOutOfRangeException(nameof(type), type, null);
 			}
@@ -55,12 +55,57 @@ namespace HBitcoin.KeyManagement
 
 				KeyPath.Parse(PathString);
 			}
-			catch (Exception ex)
+			catch(Exception ex)
 			{
 				throw new ArgumentOutOfRangeException($"{nameof(id)} : {id}", ex);
 			}
 
 			Id = id;
 		}
+
+		#region Equality
+
+		public bool Equals(SafeAccount other) => PathString.Equals(other.PathString, StringComparison.Ordinal);
+
+		public override bool Equals(object obj)
+		{
+			bool rc = false;
+			if(obj is SafeAccount)
+			{
+				var transaction = (SafeAccount) obj;
+				rc = PathString.Equals(transaction.PathString, StringComparison.Ordinal);
+			}
+			return rc;
+		}
+
+		public override int GetHashCode()
+		{
+			return PathString.GetHashCode();
+		}
+
+		public static bool operator !=(SafeAccount sa1, SafeAccount sa2)
+		{
+			return !(sa1 == sa2);
+		}
+
+		public static bool operator ==(SafeAccount sa1, SafeAccount sa2)
+		{
+			bool rc;
+
+			if(ReferenceEquals(sa1, sa2)) rc = true;
+
+			else if((object) sa1 == null || (object) sa2 == null)
+			{
+				rc = false;
+			}
+			else
+			{
+				rc = sa1.PathString.Equals(sa2.PathString, StringComparison.Ordinal);
+			}
+
+			return rc;
+		}
+
+		#endregion
 	}
 }

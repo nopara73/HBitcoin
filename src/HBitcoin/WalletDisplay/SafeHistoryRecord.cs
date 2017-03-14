@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using HBitcoin.FullBlockSpv;
 using NBitcoin;
 
 namespace HBitcoin.WalletDisplay
@@ -37,17 +38,14 @@ namespace HBitcoin.WalletDisplay
 			get { return _amount; }
 			set { SetField(ref _amount, value); }
 		}
-		private int _blockHeight;
-		/// <summary>
-		/// -1 if unconfirmed
-		/// </summary>
-		public int BlockHeight
+		private TransactionHeight _blockHeight;
+		public TransactionHeight BlockHeight
 		{
 			get { return _blockHeight; }
 			set { SetField(ref _blockHeight, value); }
 		}
 
-		public bool Confirmed => BlockHeight != -1;
+		public bool Confirmed => BlockHeight.Type == TransactionHeightType.Chain;
 
 		private uint256 _transactionId;
 		public uint256 TransactionId
