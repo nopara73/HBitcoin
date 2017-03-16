@@ -23,7 +23,7 @@ namespace HBitcoin.Tests
 		[Theory]
 		[InlineData("TestNet")]
 		[InlineData("Main")]
-		public void SycingTest(string networkString)
+		public void SyncingTest(string networkString)
 		{
 			// load wallet
 			Network network = networkString == "TestNet"? Network.TestNet:Network.Main;

@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using ConcurrentCollections;
@@ -14,6 +15,7 @@ using HBitcoin.WalletDisplay;
 using NBitcoin;
 using NBitcoin.Protocol;
 using NBitcoin.Protocol.Behaviors;
+using Newtonsoft.Json.Linq;
 using Stratis.Bitcoin.BlockPulling;
 
 namespace HBitcoin.FullBlockSpv
@@ -23,6 +25,8 @@ namespace HBitcoin.FullBlockSpv
 		public static Safe Safe { get; private set; }
 		public static bool TracksDefaultSafe { get; private set; }
 		public static ConcurrentHashSet<SafeAccount> SafeAccounts { get; private set; }
+
+		private static HttpClient _httpClient;
 
 		private static int _CreationHeight = -1;
 
@@ -332,9 +336,11 @@ namespace HBitcoin.FullBlockSpv
 
 	    #endregion
 
-		public static void Init(Safe safeToTrack, bool trackDefaultSafe = true, params SafeAccount[] accountsToTrack)
-	    {
-		    Safe = safeToTrack;
+		public static void Init(Safe safeToTrack, HttpClientHandler handler = null, bool trackDefaultSafe = true, params SafeAccount[] accountsToTrack)
+		{
+			_httpClient = handler == null ? new HttpClient() : new HttpClient(handler);
+
+			Safe = safeToTrack;
 		    if(accountsToTrack == null || !accountsToTrack.Any())
 			{
 				SafeAccounts = new ConcurrentHashSet<SafeAccount>();
@@ -719,20 +725,18 @@ namespace HBitcoin.FullBlockSpv
 		/// <summary>
 		/// 
 		/// </summary>
-		/// <param name="transaction"></param>
-		/// <param name="failingReason">If doesn't fail then empty string</param>
-		/// <returns>true if success</returns>
-		public static async Task<BuildTransactionResult> BuildTransactionAsync(BitcoinAddress addressToSend, SafeAccount account = null, bool allowUnconfirmed = false)
+		/// <param name="addressToSend"></param>
+		/// <param name="amount">If Money.Zero then spend all available amount</param>
+		/// <param name="account"></param>
+		/// <param name="allowUnconfirmed">Allow to spend unconfirmed transactions, if necessary</param>
+		/// <returns></returns>
+		public static async Task<BuildTransactionResult> BuildTransactionAsync(BitcoinAddress addressToSend, Money amount, SafeAccount account = null, bool allowUnconfirmed = false)
 		{
 			try
 			{
 				AssertAccount(account);
 
-				// 1. Find all coins I can spend from the account
-				Debug.WriteLine("Finding all unspent coins...");
-				IDictionary<ICoin, bool> unspentCoins = GetUnspentCoins(account, allowUnconfirmed);
-
-				// 2. Get the script pubkey of the change.
+				// 1. Get the script pubkey of the change.
 				Debug.WriteLine("Select change address...");
 				Script changeScriptPubKey;
 				int i = 0;
@@ -747,37 +751,139 @@ namespace HBitcoin.FullBlockSpv
 					i++;
 				}
 
+				// 2. Find all coins I can spend from the account
 				// 3. How much money we can spend?
 				Debug.WriteLine("Calculating available amount...");
-				var availableAmount = Money.Zero;
-				var unconfirmedAvailableAmount = Money.Zero;
-				foreach (var elem in unspentCoins)
+				IDictionary<Coin, bool> unspentCoins;
+				AvailableAmount balance = GetBalance(out unspentCoins, account, allowUnconfirmed);
+				var availableAmount = balance.Confirmed;
+				var unconfirmedAvailableAmount = balance.Unconfirmed;
+				Debug.WriteLine($"Available amount: {availableAmount}");
+
+				BuildTransactionResult result = new BuildTransactionResult();
+
+				// 4. Get and calculate fee
+				Debug.WriteLine("Calculating dynamic transaction fee...");
+				Money feePerBytes = null;
+				try
 				{
-					// If can spend unconfirmed add all
-					if (allowUnconfirmed)
+					feePerBytes = await QueryFeePerBytesAsync().ConfigureAwait(false);
+				}
+				catch (Exception ex)
+				{
+					Debug.WriteLine(ex.Message);
+					return new BuildTransactionResult()
 					{
-						availableAmount += elem.Key.Amount as Money;
-						if (!elem.Value)
-							unconfirmedAvailableAmount += elem.Key.Amount as Money;
+						Success = false,
+						FailingReason = $"Couldn't calculate transaction fee. Reason:{Environment.NewLine}{ex}"
+					};
+				}
+
+				bool spendAll = amount == Money.Zero;
+				int inNum;
+				if(spendAll)
+				{
+					inNum = unspentCoins.Count;
+				}
+				else
+				{
+					const int expectedMinTxSize = 1 * 148 + 2 * 34 + 10 - 1;
+					try
+					{
+						inNum = SelectCoinsToSpend(unspentCoins, amount + feePerBytes * expectedMinTxSize).Count;
 					}
-					// else only add confirmed ones
-					else
+					catch(InsufficientBalanceException)
 					{
-						if (elem.Value)
+						return new BuildTransactionResult
 						{
-							availableAmount += elem.Key.Amount as Money;
-						}
+							Success = false,
+							FailingReason = "Not enough funds"
+						};
 					}
 				}
 
-				throw new NotImplementedException();
+				const int outNum = 2; // 1 address to send + 1 for change
+				var estimatedTxSize = inNum * 148 + outNum * 34 + 10 + inNum; // http://bitcoin.stackexchange.com/questions/1195/how-to-calculate-transaction-size-before-sending
+				Debug.WriteLine($"Estimated tx size: {estimatedTxSize} bytes");
+				Money fee = feePerBytes * estimatedTxSize;
+				Debug.WriteLine($"Fee: {fee.ToDecimal(MoneyUnit.BTC):0.#############################}btc");
+				result.Fee = fee;
 
-				return new BuildTransactionResult
+				// 5. How much to spend?
+				Money amountToSend = null;
+				if (spendAll)
 				{
-					Success = true
-				};
+					amountToSend = availableAmount;
+					amountToSend -= fee;
+				}
+				else
+				{
+					amountToSend = amount;
+				}
+
+				// 6. Do some checks
+				if (amountToSend < Money.Zero || availableAmount < amountToSend + fee)
+					return new BuildTransactionResult
+					{
+						Success = false,
+						FailingReason = "Not enough funds"
+					};
+				
+				decimal feePc = Math.Round((100 * fee.ToDecimal(MoneyUnit.BTC)) / amountToSend.ToDecimal(MoneyUnit.BTC));
+				result.FeePercentOfTotalBalance = feePc;
+				if (feePc > 1)
+				{
+					Debug.WriteLine("");
+					Debug.WriteLine($"The transaction fee is {feePc:0.#}% of your transaction amount.");
+					Debug.WriteLine($"Sending:\t {amountToSend.ToDecimal(MoneyUnit.BTC):0.#############################}btc");
+					Debug.WriteLine($"Fee:\t\t {fee.ToDecimal(MoneyUnit.BTC):0.#############################}btc");
+				}
+
+				var confirmedAvailableAmount = availableAmount - unconfirmedAvailableAmount;
+				var totalOutAmount = amountToSend + fee;
+				if (confirmedAvailableAmount < totalOutAmount)
+				{
+					var unconfirmedToSend = totalOutAmount - confirmedAvailableAmount;
+					Debug.WriteLine("");
+					Debug.WriteLine($"In order to complete this transaction you have to spend {unconfirmedToSend.ToDecimal(MoneyUnit.BTC):0.#############################} unconfirmed btc.");
+					result.SpendsUnconfirmed = true;
+				}
+
+				// 7. Select coins
+				Debug.WriteLine("Selecting coins...");
+				HashSet<Coin> coinsToSpend = SelectCoinsToSpend(unspentCoins, totalOutAmount);
+
+				// 8. Get signing keys
+				var signingKeys = new HashSet<ISecret>();
+				foreach (var coin in coinsToSpend)
+				{
+					var signingKey = Safe.FindPrivateKey(coin.ScriptPubKey.GetDestinationAddress(Safe.Network), Tracker.TrackedScriptPubKeys.Count, account);
+					signingKeys.Add(signingKey);
+				}
+
+				// 9. Build the transaction
+				Debug.WriteLine("Signing transaction...");
+				var builder = new TransactionBuilder();
+				var tx = builder
+					.AddCoins(coinsToSpend)
+					.AddKeys(signingKeys.ToArray())
+					.Send(addressToSend, amountToSend)
+					.SetChange(changeScriptPubKey)
+					.SendFees(fee)
+					.BuildTransaction(true);
+
+				if(!builder.Verify(tx))
+					return new BuildTransactionResult
+					{
+						Success = false,
+						FailingReason = "Couldn't build the transaction"
+					};
+
+				result.Transaction = tx;
+				result.Success = true;
+				return result;
 			}
-			catch(Exception ex)
+			catch (Exception ex)
 			{
 				return new BuildTransactionResult
 				{
@@ -786,22 +892,111 @@ namespace HBitcoin.FullBlockSpv
 				};
 			}
 		}
+
+		private static async Task<Money> QueryFeePerBytesAsync()
+		{
+			HttpResponseMessage response =
+				await _httpClient.GetAsync(@"http://api.blockcypher.com/v1/btc/main", HttpCompletionOption.ResponseContentRead)
+					.ConfigureAwait(false);
+
+			var json = JObject.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+			var fastestSatoshiPerByteFee = (int)(json.Value<decimal>("high_fee_per_kb") / 1024);
+			var feePerBytes = new Money(fastestSatoshiPerByteFee, MoneyUnit.Satoshi);
+
+			return feePerBytes;
+		}
+
+		private static HashSet<Coin> SelectCoinsToSpend(IDictionary<Coin, bool> unspentCoins, Money totalOutAmount)
+		{
+			var coinsToSpend = new HashSet<Coin>();
+			var unspentConfirmedCoins = new List<Coin>();
+			var unspentUnconfirmedCoins = new List<Coin>();
+			foreach (var elem in unspentCoins)
+				if (elem.Value) unspentConfirmedCoins.Add(elem.Key);
+				else unspentUnconfirmedCoins.Add(elem.Key);
+
+			bool haveEnough = SelectCoins(ref coinsToSpend, totalOutAmount, unspentConfirmedCoins);
+			if (!haveEnough)
+				haveEnough = SelectCoins(ref coinsToSpend, totalOutAmount, unspentUnconfirmedCoins);
+			if (!haveEnough)
+				throw new InsufficientBalanceException();
+
+			return coinsToSpend;
+		}
+		private static bool SelectCoins(ref HashSet<Coin> coinsToSpend, Money totalOutAmount, IEnumerable<Coin> unspentCoins)
+		{
+			var haveEnough = false;
+			foreach (var coin in unspentCoins.OrderByDescending(x => x.Amount))
+			{
+				coinsToSpend.Add(coin);
+				// if doesn't reach amount, continue adding next coin
+				if (coinsToSpend.Sum(x => x.Amount) < totalOutAmount) continue;
+
+				haveEnough = true;
+				break;
+			}
+
+			return haveEnough;
+		}
+
+		public static AvailableAmount GetBalance(out IDictionary<Coin, bool> unspentCoins, SafeAccount account = null, bool allowUnconfirmed = false)
+		{
+			// 1. Find all coins I can spend from the account
+			Debug.WriteLine("Finding all unspent coins...");
+			unspentCoins = GetUnspentCoins(account, allowUnconfirmed);
+
+			// 2. How much money we can spend?
+			var availableAmount = Money.Zero;
+			var unconfirmedAvailableAmount = Money.Zero;
+			foreach (var elem in unspentCoins)
+			{
+				// If can spend unconfirmed add all
+				if (allowUnconfirmed)
+				{
+					availableAmount += elem.Key.Amount as Money;
+					if (!elem.Value)
+						unconfirmedAvailableAmount += elem.Key.Amount as Money;
+				}
+				// else only add confirmed ones
+				else
+				{
+					if (elem.Value)
+					{
+						availableAmount += elem.Key.Amount as Money;
+					}
+				}
+			}
+
+			return new AvailableAmount
+			{
+				Confirmed = availableAmount,
+				Unconfirmed = unconfirmedAvailableAmount
+			};
+		}
+
 		public struct BuildTransactionResult
 		{
 			public bool Success;
 			public string FailingReason;
 			public Transaction Transaction;
 			public bool SpendsUnconfirmed;
+			public Money Fee;
+			public decimal FeePercentOfTotalBalance;
+		}
+		public struct AvailableAmount
+		{
+			public Money Confirmed;
+			public Money Unconfirmed;
 		}
 
 		/// <summary>
 		/// Find all unspent transaction output of the account
 		/// </summary>
-		public static IDictionary<ICoin, bool> GetUnspentCoins(SafeAccount account = null, bool allowUnconfirmed = false)
+		public static IDictionary<Coin, bool> GetUnspentCoins(SafeAccount account = null, bool allowUnconfirmed = false)
 		{
 			AssertAccount(account);
 
-			var unspentCoins = new Dictionary<ICoin, bool>();
+			var unspentCoins = new Dictionary<Coin, bool>();
 
 			var trackedScriptPubkeys = GetTrackedScriptPubKeysBySafeAccount(account);
 
@@ -829,7 +1024,7 @@ namespace HBitcoin.FullBlockSpv
 			return unspentCoins;
 		}
 
-		private static bool IsUnspent(ICoin coin) => Tracker
+		private static bool IsUnspent(Coin coin) => Tracker
 			.TrackedTransactions
 			.Where(x => x.Height.Type == TransactionHeightType.Chain || x.Height.Type == TransactionHeightType.MemPool)
 			.SelectMany(x => x.Transaction.Inputs)
@@ -848,5 +1043,13 @@ namespace HBitcoin.FullBlockSpv
 		}
 
 		#endregion
+	}
+
+	internal class InsufficientBalanceException : Exception
+	{
+		public InsufficientBalanceException()
+		{
+			
+		}
 	}
 }
