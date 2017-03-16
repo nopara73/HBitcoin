@@ -317,10 +317,10 @@ namespace HBitcoin.Tests
 					Assert.True(found.Amount.Equals(record.Item2));
 					qBitFoundItToo.Add(found);
 				}
-				
-				foreach(var record in fullSpvHistoryRecords)
+
+				foreach (var record in fullSpvHistoryRecords)
 				{
-					if(!qBitFoundItToo.Contains(record))
+					if (!qBitFoundItToo.Contains(record))
 					{
 						Assert.True(null == qBitHistoryRecords.FirstOrDefault(x => x.Item4 == record.TransactionId));
 						Debug.WriteLine($@"QBitNinja failed to find, but SPV found it: {record.TimeStamp.DateTime}	{record.Amount}	{record.Confirmed}		{record.TransactionId}");

@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ConcurrentCollections;
@@ -16,6 +17,8 @@ using NBitcoin;
 using NBitcoin.Protocol;
 using NBitcoin.Protocol.Behaviors;
 using Newtonsoft.Json.Linq;
+using QBitNinja.Client;
+using QBitNinja.Client.Models;
 using Stratis.Bitcoin.BlockPulling;
 
 namespace HBitcoin.FullBlockSpv
@@ -26,6 +29,7 @@ namespace HBitcoin.FullBlockSpv
 		public static bool TracksDefaultSafe { get; private set; }
 		public static ConcurrentHashSet<SafeAccount> SafeAccounts { get; private set; }
 
+		private static QBitNinjaClient _qBitClient;
 		private static HttpClient _httpClient;
 
 		private static int _CreationHeight = -1;
@@ -338,10 +342,17 @@ namespace HBitcoin.FullBlockSpv
 
 		public static void Init(Safe safeToTrack, HttpClientHandler handler = null, bool trackDefaultSafe = true, params SafeAccount[] accountsToTrack)
 		{
-			_httpClient = handler == null ? new HttpClient() : new HttpClient(handler);
-
 			Safe = safeToTrack;
-		    if(accountsToTrack == null || !accountsToTrack.Any())
+
+			_qBitClient = new QBitNinjaClient(safeToTrack.Network);
+			_httpClient = new HttpClient();
+			if (handler != null)
+			{
+				_qBitClient.SetHttpMessageHandler(handler);
+				_httpClient = new HttpClient(handler);
+			}
+
+			if (accountsToTrack == null || !accountsToTrack.Any())
 			{
 				SafeAccounts = new ConcurrentHashSet<SafeAccount>();
 			}
@@ -725,12 +736,13 @@ namespace HBitcoin.FullBlockSpv
 		/// <summary>
 		/// 
 		/// </summary>
-		/// <param name="addressToSend"></param>
+		/// <param name="scriptPubKeyToSpend"></param>
 		/// <param name="amount">If Money.Zero then spend all available amount</param>
+		/// <param name="feeType"></param>
 		/// <param name="account"></param>
 		/// <param name="allowUnconfirmed">Allow to spend unconfirmed transactions, if necessary</param>
 		/// <returns></returns>
-		public static async Task<BuildTransactionResult> BuildTransactionAsync(BitcoinAddress addressToSend, Money amount, SafeAccount account = null, bool allowUnconfirmed = false)
+		public static async Task<BuildTransactionResult> BuildTransactionAsync(Script scriptPubKeyToSpend, Money amount, FeeType feeType, SafeAccount account = null, bool allowUnconfirmed = false)
 		{
 			try
 			{
@@ -767,12 +779,12 @@ namespace HBitcoin.FullBlockSpv
 				Money feePerBytes = null;
 				try
 				{
-					feePerBytes = await QueryFeePerBytesAsync().ConfigureAwait(false);
+					feePerBytes = await QueryFeePerBytesAsync(feeType).ConfigureAwait(false);
 				}
 				catch (Exception ex)
 				{
 					Debug.WriteLine(ex.Message);
-					return new BuildTransactionResult()
+					return new BuildTransactionResult
 					{
 						Success = false,
 						FailingReason = $"Couldn't calculate transaction fee. Reason:{Environment.NewLine}{ex}"
@@ -829,8 +841,8 @@ namespace HBitcoin.FullBlockSpv
 						FailingReason = "Not enough funds"
 					};
 				
-				decimal feePc = Math.Round((100 * fee.ToDecimal(MoneyUnit.BTC)) / amountToSend.ToDecimal(MoneyUnit.BTC));
-				result.FeePercentOfTotalBalance = feePc;
+				decimal feePc = (100 * fee.ToDecimal(MoneyUnit.BTC)) / amountToSend.ToDecimal(MoneyUnit.BTC);
+				result.FeePercentOfSent = feePc;
 				if (feePc > 1)
 				{
 					Debug.WriteLine("");
@@ -867,7 +879,7 @@ namespace HBitcoin.FullBlockSpv
 				var tx = builder
 					.AddCoins(coinsToSpend)
 					.AddKeys(signingKeys.ToArray())
-					.Send(addressToSend, amountToSend)
+					.Send(scriptPubKeyToSpend, amountToSend)
 					.SetChange(changeScriptPubKey)
 					.SendFees(fee)
 					.BuildTransaction(true);
@@ -893,15 +905,27 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-		private static async Task<Money> QueryFeePerBytesAsync()
+		private static async Task<Money> QueryFeePerBytesAsync(FeeType feeType)
 		{
 			HttpResponseMessage response =
 				await _httpClient.GetAsync(@"http://api.blockcypher.com/v1/btc/main", HttpCompletionOption.ResponseContentRead)
 					.ConfigureAwait(false);
 
 			var json = JObject.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
-			var fastestSatoshiPerByteFee = (int)(json.Value<decimal>("high_fee_per_kb") / 1024);
-			var feePerBytes = new Money(fastestSatoshiPerByteFee, MoneyUnit.Satoshi);
+			int satoshiPerByteFee;
+			if(feeType == FeeType.High)
+			{
+				satoshiPerByteFee = (int)(json.Value<decimal>("high_fee_per_kb") / 1024);
+			}
+			else if(feeType == FeeType.Medium)
+			{
+				satoshiPerByteFee = (int)(json.Value<decimal>("medium_fee_per_kb") / 1024);
+			}
+			else // if(feeType == FeeType.Low)
+			{
+				satoshiPerByteFee = (int)(json.Value<decimal>("low_fee_per_kb") / 1024);
+			}
+			var feePerBytes = new Money(satoshiPerByteFee, MoneyUnit.Satoshi);
 
 			return feePerBytes;
 		}
@@ -981,7 +1005,7 @@ namespace HBitcoin.FullBlockSpv
 			public Transaction Transaction;
 			public bool SpendsUnconfirmed;
 			public Money Fee;
-			public decimal FeePercentOfTotalBalance;
+			public decimal FeePercentOfSent;
 		}
 		public struct AvailableAmount
 		{
@@ -1030,10 +1054,82 @@ namespace HBitcoin.FullBlockSpv
 			.SelectMany(x => x.Transaction.Inputs)
 			.All(txin => txin.PrevOut != coin.Outpoint);
 
-		public static async Task<SendTransactionResult> SendTransactionAsync(Transaction transaction)
+		public static async Task<SendTransactionResult> SendTransactionAsync(Transaction tx)
 		{
-			// After you send add it to the trackedtransactions so immediate transaction building get more accurate outputs
-			throw new NotImplementedException();
+			Debug.WriteLine($"Transaction Id: {tx.GetHash()}");
+
+			// QBit's success response is buggy so let's check manually, too
+			BroadcastResponse broadcastResponse;
+			var success = false;
+			var tried = 0;
+			const int maxTry = 7;
+			do
+			{
+				tried++;
+				Debug.WriteLine($"Try broadcasting transaction... ({tried})");
+				broadcastResponse = await _qBitClient.Broadcast(tx).ConfigureAwait(false);
+				var getTxResp = await _qBitClient.GetTransaction(tx.GetHash()).ConfigureAwait(false);
+				if(getTxResp != null)
+				{
+					success = true;
+					break;
+				}
+				else
+				{
+					await Task.Delay(3000).ConfigureAwait(false);
+				}
+			} while(tried < maxTry);
+
+			if(!success)
+			{
+				if(broadcastResponse.Error != null)
+				{
+					// Try broadcasting with smartbit if QBit fails (QBit issue)
+					if(broadcastResponse.Error.ErrorCode == RejectCode.INVALID && broadcastResponse.Error.Reason == "Unknown")
+					{
+						Debug.WriteLine("Try broadcasting transaction with smartbit...");
+
+						var post = "https://testnet-api.smartbit.com.au/v1/blockchain/pushtx";
+						if(Safe.Network == Network.Main)
+							post = "https://api.smartbit.com.au/v1/blockchain/pushtx";
+
+						var content = new StringContent(new JObject(new JProperty("hex", tx.ToHex())).ToString(), Encoding.UTF8,
+							"application/json");
+						var resp = await _httpClient.PostAsync(post, content).ConfigureAwait(false);
+						var json = JObject.Parse(await resp.Content.ReadAsStringAsync().ConfigureAwait(false));
+						if(json.Value<bool>("success"))
+						{
+							Debug.WriteLine("Transaction is successfully propagated on the network.");
+							return new SendTransactionResult
+							{
+								Success = true
+							};
+						}
+						else
+						{
+							Debug.WriteLine(
+								$"Error code: {json["error"].Value<string>("code")} Reason: {json["error"].Value<string>("message")}");
+						}
+					}
+					else
+					{
+						Debug.WriteLine($"Error code: {broadcastResponse.Error.ErrorCode} Reason: {broadcastResponse.Error.Reason}");
+					}
+				}
+				Debug.WriteLine(
+					"The transaction might not have been successfully broadcasted. Please check the Transaction ID in a block explorer.");
+				return new SendTransactionResult
+				{
+					Success = false,
+					FailingReason =
+						"The transaction might not have been successfully broadcasted. Please check the Transaction ID in a block explorer."
+				};
+			}
+			Debug.WriteLine("Transaction is successfully propagated on the network.");
+			return new SendTransactionResult
+			{
+				Success = true
+			};
 		}
 
 		public struct SendTransactionResult
