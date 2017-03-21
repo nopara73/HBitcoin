@@ -20,6 +20,8 @@ namespace HBitcoin.Tests
 {
 	public class FullSpvWalletTests
 	{
+		private bool _fullyConnected;
+		private bool _syncedOnce;
 		[Theory]
 		[InlineData("TestNet")]
 		[InlineData("Main")]
@@ -45,28 +47,13 @@ namespace HBitcoin.Tests
 
 			// create walletjob
 			WalletJob.Init(safe);
-			var fullyConnected = false;
-			var synced = false;
+
 			// note some event
-			WalletJob.ConnectedNodeCountChanged += delegate
-			{
-				if(WalletJob.MaxConnectedNodeCount == WalletJob.ConnectedNodeCount)
-				{
-					fullyConnected = true;
-					Debug.WriteLine(
-						$"{nameof(WalletJob.MaxConnectedNodeCount)} reached: {WalletJob.MaxConnectedNodeCount}");
-				}
-				else Debug.WriteLine($"{nameof(WalletJob.ConnectedNodeCount)}: {WalletJob.ConnectedNodeCount}");
-			};
-			WalletJob.StateChanged += delegate
-			{
-				Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
-				if(WalletJob.State == WalletState.Synced)
-				{
-					synced = true;
-				}
-				else synced = false;
-			};
+			_fullyConnected = false;
+			_syncedOnce = false;
+			WalletJob.ConnectedNodeCountChanged += WalletJob_ConnectedNodeCountChanged;
+			WalletJob.StateChanged += WalletJob_StateChanged;
+
 			Assert.True(WalletJob.SafeAccounts.Count == 0);
 			Assert.True(WalletJob.ConnectedNodeCount == 0);
 			var allTxCount = WalletJob.Tracker.TrackedTransactions.Count;
@@ -84,12 +71,12 @@ namespace HBitcoin.Tests
 			try
 			{
 				// wait until fully synced and connected
-				while (!fullyConnected)
+				while (!_fullyConnected)
 				{
 					Task.Delay(10).Wait();
 				}
 
-				while (!synced)
+				while (!_syncedOnce)
 				{
 					Task.Delay(1000).Wait();
 				}
@@ -109,7 +96,31 @@ namespace HBitcoin.Tests
 			{
 				cts.Cancel();
 				Task.WhenAll(reportTask, walletJobTask).Wait();
+
+				WalletJob.ConnectedNodeCountChanged -= WalletJob_ConnectedNodeCountChanged;
+				WalletJob.StateChanged -= WalletJob_StateChanged;
 			}
+		}
+
+		private void WalletJob_StateChanged(object sender, EventArgs e)
+		{
+			Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
+			if (WalletJob.State == WalletState.Synced)
+			{
+				_syncedOnce = true;
+			}
+			else _syncedOnce = false;
+		}
+
+		private void WalletJob_ConnectedNodeCountChanged(object sender, EventArgs e)
+		{
+			if (WalletJob.MaxConnectedNodeCount == WalletJob.ConnectedNodeCount)
+			{
+				_fullyConnected = true;
+				Debug.WriteLine(
+					$"{nameof(WalletJob.MaxConnectedNodeCount)} reached: {WalletJob.MaxConnectedNodeCount}");
+			}
+			else Debug.WriteLine($"{nameof(WalletJob.ConnectedNodeCount)}: {WalletJob.ConnectedNodeCount}");
 		}
 
 		[Fact]

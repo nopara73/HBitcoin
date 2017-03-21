@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -26,6 +24,8 @@ namespace HBitcoin.FullBlockSpv
 {
 	public static class WalletJob
 	{
+		#region MembersAndProperties
+
 		public static Safe Safe { get; private set; }
 		public static bool TracksDefaultSafe { get; private set; }
 		public static ConcurrentHashSet<SafeAccount> SafeAccounts { get; private set; }
@@ -33,18 +33,16 @@ namespace HBitcoin.FullBlockSpv
 		private static QBitNinjaClient _qBitClient;
 		private static HttpClient _httpClient;
 
-		private static Height _CreationHeight = Height.Unknown;
-		
+		private static Height _creationHeight;
 		public static Height CreationHeight
 		{
 			get
 			{
 				// it's enough to estimate once
-				if(_CreationHeight != Height.Unknown) return _CreationHeight;
-				else return _CreationHeight = FindSafeCreationHeight();
+				if(_creationHeight != Height.Unknown) return _creationHeight;
+				else return _creationHeight = FindSafeCreationHeight();
 			}
 		}
-
 		private static Height FindSafeCreationHeight()
 		{
 			try
@@ -75,7 +73,7 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-		public static Height BestHeight => Tracker.BestHeight;
+		public static Height BestHeight => HeaderChain.Height < Tracker.BestHeight ? Height.Unknown : Tracker.BestHeight;
 		public static event EventHandler BestHeightChanged;
 		private static void OnBestHeightChanged() => BestHeightChanged?.Invoke(null, EventArgs.Empty);
 
@@ -87,7 +85,6 @@ namespace HBitcoin.FullBlockSpv
 				return Nodes.ConnectedNodes.Count;
 			}
 		}
-
 		public static int MaxConnectedNodeCount
 		{
 			get
@@ -96,7 +93,6 @@ namespace HBitcoin.FullBlockSpv
 				return Nodes.MaximumNodeConnection;
 			}
 		}
-
 		public static event EventHandler ConnectedNodeCountChanged;
 		private static void OnConnectedNodeCountChanged() => ConnectedNodeCountChanged?.Invoke(null, EventArgs.Empty);
 
@@ -113,7 +109,6 @@ namespace HBitcoin.FullBlockSpv
 		}
 		public static event EventHandler StateChanged;
 		private static void OnStateChanged() => StateChanged?.Invoke(null, EventArgs.Empty);
-
 		public static bool ChainsInSync => Tracker.BestHeight == HeaderChain.Height;
 
 		private static readonly SemaphoreSlim SemaphoreSave = new SemaphoreSlim(1, 1);
@@ -121,135 +116,12 @@ namespace HBitcoin.FullBlockSpv
 		public static NodesGroup Nodes { get; private set; }
 		private static LookaheadBlockPuller BlockPuller;
 
-		/// <summary>
-		/// 
-		/// </summary>
-		/// <param name="account">if null then default safe, if doesn't contain, then exception</param>
-		/// <returns></returns>
-		public static IEnumerable<SafeHistoryRecord> GetSafeHistory(SafeAccount account = null)
-		{
-			AssertAccount(account);
-
-			var safeHistory = new HashSet<SafeHistoryRecord>();
-
-			var transactions = GetAllChainAndMemPoolTransactionsBySafeAccount(account);
-			var scriptPubKeys = GetTrackedScriptPubKeysBySafeAccount(account);
-
-			foreach(SmartTransaction transaction in transactions)
-			{
-				SafeHistoryRecord record = new SafeHistoryRecord();
-				record.TransactionId = transaction.GetHash();
-				record.BlockHeight = transaction.Height;
-				// todo: the mempool could note when it seen the transaction the first time
-				record.TimeStamp = !transaction.Confirmed
-					? DateTimeOffset.UtcNow
-					: HeaderChain.GetBlock(transaction.Height).Header.BlockTime;
-
-				record.Amount = Money.Zero; //for now
-
-				// how much came to our scriptpubkeys
-				foreach(var output in transaction.Transaction.Outputs)
-				{
-					if(scriptPubKeys.Contains(output.ScriptPubKey))
-						record.Amount += output.Value;
-				}
-
-				foreach(var input in transaction.Transaction.Inputs)
-				{
-					// do we have the input?
-					SmartTransaction inputTransaction = transactions.FirstOrDefault(x => x.GetHash() == input.PrevOut.Hash);
-					if(default(SmartTransaction) != inputTransaction)
-					{
-						// if yes then deduct from amount (bitcoin output cannot be partially spent)
-						var prevOutput = inputTransaction.Transaction.Outputs[input.PrevOut.N];
-						if(scriptPubKeys.Contains(prevOutput.ScriptPubKey))
-						{
-							record.Amount -= prevOutput.Value;
-						}
-					}
-					// if no then whatever
-				}
-
-				safeHistory.Add(record);
-			}
-
-			return safeHistory.ToList().OrderBy(x => x.TimeStamp);
-		}
-
-		private static void AssertAccount(SafeAccount account)
-		{
-			if(account == null)
-			{
-				if(!TracksDefaultSafe)
-					throw new NotSupportedException($"{nameof(TracksDefaultSafe)} cannot be {TracksDefaultSafe}");
-			}
-			else
-			{
-				if(!SafeAccounts.Any(x => x.Id == account.Id))
-					throw new NotSupportedException($"{nameof(SafeAccounts)} does not contain the provided {nameof(account)}");
-			}
-		}
-
-		public static HashSet<SmartTransaction> GetAllChainAndMemPoolTransactionsBySafeAccount(SafeAccount account = null)
-		{
-			HashSet<Script> trackedScriptPubkeys = GetTrackedScriptPubKeysBySafeAccount(account);
-			var foundTransactions = new HashSet<SmartTransaction>();
-
-			foreach(var spk in trackedScriptPubkeys)
-			{
-				HashSet<SmartTransaction> rec;
-				HashSet<SmartTransaction> spent;
-
-				if(TryFindAllChainAndMemPoolTransactions(spk, out rec, out spent))
-				{
-					foreach(var tx in rec)
-					{
-						foundTransactions.Add(tx);
-					}
-					foreach(var tx in spent)
-					{
-						foundTransactions.Add(tx);
-					}
-				}
-			}
-
-			return foundTransactions;
-		}
-
-		public static HashSet<Script> GetTrackedScriptPubKeysBySafeAccount(SafeAccount account = null)
-		{
-			var maxTracked = Tracker.TrackedScriptPubKeys.Count;
-			var allPossiblyTrackedAddresses = new HashSet<BitcoinAddress>();
-			foreach(var address in Safe.GetFirstNAddresses(maxTracked, HdPathType.Receive, account))
-			{
-				allPossiblyTrackedAddresses.Add(address);
-			}
-			foreach(var address in Safe.GetFirstNAddresses(maxTracked, HdPathType.Change, account))
-			{
-				allPossiblyTrackedAddresses.Add(address);
-			}
-			foreach(var address in Safe.GetFirstNAddresses(maxTracked, HdPathType.NonHardened, account))
-			{
-				allPossiblyTrackedAddresses.Add(address);
-			}
-
-			var actuallyTrackedScriptPubKeys = new HashSet<Script>();
-			foreach(var address in allPossiblyTrackedAddresses)
-			{
-				if(Tracker.TrackedScriptPubKeys.Any(x => x == address.ScriptPubKey))
-					actuallyTrackedScriptPubKeys.Add(address.ScriptPubKey);
-			}
-
-			return actuallyTrackedScriptPubKeys;
-		}
-	
 		private const string WorkFolderPath = "FullBlockSpvData";
 		private static string _addressManagerFilePath => Path.Combine(WorkFolderPath, $"AddressManager{Safe.Network}.dat");
 		private static string _headerChainFilePath => Path.Combine(WorkFolderPath, $"HeaderChain{Safe.Network}.dat");
 		private static string _trackerFolderPath => Path.Combine(WorkFolderPath, Safe.UniqueId);
 
-		#region SmartProperties
-		private static Tracker _tracker = null;
+		private static Tracker _tracker;
 		public static Tracker Tracker => GetTrackerAsync().Result;
 		// This async getter is for clean exception handling
 		private static async Task<Tracker> GetTrackerAsync()
@@ -331,12 +203,15 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-	    public static Network Network => Safe.Network;
+		public static Network Network => Safe.Network;
 
-	    #endregion
+		#endregion
 
 		public static void Init(Safe safeToTrack, HttpClientHandler handler = null, bool trackDefaultSafe = true, params SafeAccount[] accountsToTrack)
 		{
+			_creationHeight = Height.Unknown;
+			_tracker = null;
+
 			Safe = safeToTrack;
 
 			_qBitClient = new QBitNinjaClient(safeToTrack.Network);
@@ -353,9 +228,9 @@ namespace HBitcoin.FullBlockSpv
 			}
 			else SafeAccounts = new ConcurrentHashSet<SafeAccount>(accountsToTrack);
 
-		    TracksDefaultSafe = trackDefaultSafe;
-			
-		    State = WalletState.NotStarted;
+			TracksDefaultSafe = trackDefaultSafe;
+
+			State = WalletState.NotStarted;
 
 			Directory.CreateDirectory(WorkFolderPath);
 
@@ -383,10 +258,10 @@ namespace HBitcoin.FullBlockSpv
 			Nodes.NodeConnectionParameters = _connectionParameters;
 			BlockPuller = (LookaheadBlockPuller)bp;
 
-		    MemPoolJob.Synced += delegate
-		    {
-			    State = WalletState.Synced;
-		    };
+			MemPoolJob.Synced += delegate
+			{
+				State = WalletState.Synced;
+			};
 
 			MemPoolJob.NewTransaction += MemPoolJob_NewTransaction;
 
@@ -396,16 +271,26 @@ namespace HBitcoin.FullBlockSpv
 			Tracker.BestHeightChanged += delegate { OnBestHeightChanged(); };
 		}
 
-		private static void MemPoolJob_NewTransaction(object sender, NewTransactionEventArgs e)
+		public static async Task StartAsync(CancellationToken ctsToken)
 		{
-			if(
-				Tracker.ProcessTransaction(new SmartTransaction(e.Transaction, Height.MemPool)))
+			Nodes.Connect();
+
+			var tasks = new ConcurrentHashSet<Task>
 			{
-				UpdateSafeTracking();
-			}
+				PeriodicSaveAsync(TimeSpan.FromMinutes(3), ctsToken),
+				BlockPullerJobAsync(ctsToken),
+				MemPoolJob.StartAsync(ctsToken)
+			};
+
+			State = WalletState.SyncingBlocks;
+			await Task.WhenAll(tasks).ConfigureAwait(false);
+
+			State = WalletState.NotStarted;
+			await SaveAllChangedAsync().ConfigureAwait(false);
+			Nodes.Dispose();
 		}
 
-		#region static SafeTracking
+		#region SafeTracking
 
 		// BIP44 specifies default 20, altough we don't use BIP44, let's be somewhat consistent
 		public static int MaxCleanAddressCount { get; set; } = 20;
@@ -446,36 +331,150 @@ namespace HBitcoin.FullBlockSpv
 				i++;
 			}
 		}
-		
+
 		#endregion
 
-		public static async Task StartAsync(CancellationToken  ctsToken)
+		#region Misc
+
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="account">if null then default safe, if doesn't contain, then exception</param>
+		/// <returns></returns>
+		public static IEnumerable<SafeHistoryRecord> GetSafeHistory(SafeAccount account = null)
 		{
-			Nodes.Connect();
+			AssertAccount(account);
 
-			var tasks = new ConcurrentHashSet<Task>
-		    {
-			    PeriodicSaveAsync(TimeSpan.FromMinutes(3), ctsToken),
-				BlockPullerJobAsync(ctsToken),
-				MemPoolJob.StartAsync(ctsToken)
-			};
+			var safeHistory = new HashSet<SafeHistoryRecord>();
 
-			State = WalletState.SyncingBlocks;
-			await Task.WhenAll(tasks).ConfigureAwait(false);
+			var transactions = GetAllChainAndMemPoolTransactionsBySafeAccount(account);
+			var scriptPubKeys = GetTrackedScriptPubKeysBySafeAccount(account);
 
-		    State = WalletState.NotStarted;
-			await SaveAllChangedAsync().ConfigureAwait(false);
-			Nodes.Dispose();
+			foreach (SmartTransaction transaction in transactions)
+			{
+				SafeHistoryRecord record = new SafeHistoryRecord();
+				record.TransactionId = transaction.GetHash();
+				record.BlockHeight = transaction.Height;
+				// todo: the mempool could note when it seen the transaction the first time
+				record.TimeStamp = !transaction.Confirmed
+					? DateTimeOffset.UtcNow
+					: HeaderChain.GetBlock(transaction.Height).Header.BlockTime;
+
+				record.Amount = Money.Zero; //for now
+
+				// how much came to our scriptpubkeys
+				foreach (var output in transaction.Transaction.Outputs)
+				{
+					if (scriptPubKeys.Contains(output.ScriptPubKey))
+						record.Amount += output.Value;
+				}
+
+				foreach (var input in transaction.Transaction.Inputs)
+				{
+					// do we have the input?
+					SmartTransaction inputTransaction = transactions.FirstOrDefault(x => x.GetHash() == input.PrevOut.Hash);
+					if (default(SmartTransaction) != inputTransaction)
+					{
+						// if yes then deduct from amount (bitcoin output cannot be partially spent)
+						var prevOutput = inputTransaction.Transaction.Outputs[input.PrevOut.N];
+						if (scriptPubKeys.Contains(prevOutput.ScriptPubKey))
+						{
+							record.Amount -= prevOutput.Value;
+						}
+					}
+					// if no then whatever
+				}
+
+				safeHistory.Add(record);
+			}
+
+			return safeHistory.ToList().OrderBy(x => x.TimeStamp);
 		}
 
-	    /// <summary>
-	    /// 
-	    /// </summary>
-	    /// <param name="scriptPubKey"></param>
-	    /// <param name="receivedTransactions">int: block height</param>
-	    /// <param name="spentTransactions">int: block height</param>
-	    /// <returns></returns>
-	    public static bool TryFindAllChainAndMemPoolTransactions(Script scriptPubKey, out HashSet<SmartTransaction> receivedTransactions, out HashSet<SmartTransaction> spentTransactions)
+		private static void AssertAccount(SafeAccount account)
+		{
+			if (account == null)
+			{
+				if (!TracksDefaultSafe)
+					throw new NotSupportedException($"{nameof(TracksDefaultSafe)} cannot be {TracksDefaultSafe}");
+			}
+			else
+			{
+				if (!SafeAccounts.Any(x => x.Id == account.Id))
+					throw new NotSupportedException($"{nameof(SafeAccounts)} does not contain the provided {nameof(account)}");
+			}
+		}
+
+		public static HashSet<SmartTransaction> GetAllChainAndMemPoolTransactionsBySafeAccount(SafeAccount account = null)
+		{
+			HashSet<Script> trackedScriptPubkeys = GetTrackedScriptPubKeysBySafeAccount(account);
+			var foundTransactions = new HashSet<SmartTransaction>();
+
+			foreach (var spk in trackedScriptPubkeys)
+			{
+				HashSet<SmartTransaction> rec;
+				HashSet<SmartTransaction> spent;
+
+				if (TryFindAllChainAndMemPoolTransactions(spk, out rec, out spent))
+				{
+					foreach (var tx in rec)
+					{
+						foundTransactions.Add(tx);
+					}
+					foreach (var tx in spent)
+					{
+						foundTransactions.Add(tx);
+					}
+				}
+			}
+
+			return foundTransactions;
+		}
+
+		public static HashSet<Script> GetTrackedScriptPubKeysBySafeAccount(SafeAccount account = null)
+		{
+			var maxTracked = Tracker.TrackedScriptPubKeys.Count;
+			var allPossiblyTrackedAddresses = new HashSet<BitcoinAddress>();
+			foreach (var address in Safe.GetFirstNAddresses(maxTracked, HdPathType.Receive, account))
+			{
+				allPossiblyTrackedAddresses.Add(address);
+			}
+			foreach (var address in Safe.GetFirstNAddresses(maxTracked, HdPathType.Change, account))
+			{
+				allPossiblyTrackedAddresses.Add(address);
+			}
+			foreach (var address in Safe.GetFirstNAddresses(maxTracked, HdPathType.NonHardened, account))
+			{
+				allPossiblyTrackedAddresses.Add(address);
+			}
+
+			var actuallyTrackedScriptPubKeys = new HashSet<Script>();
+			foreach (var address in allPossiblyTrackedAddresses)
+			{
+				if (Tracker.TrackedScriptPubKeys.Any(x => x == address.ScriptPubKey))
+					actuallyTrackedScriptPubKeys.Add(address.ScriptPubKey);
+			}
+
+			return actuallyTrackedScriptPubKeys;
+		}
+
+		private static void MemPoolJob_NewTransaction(object sender, NewTransactionEventArgs e)
+		{
+			if (
+				Tracker.ProcessTransaction(new SmartTransaction(e.Transaction, Height.MemPool)))
+			{
+				UpdateSafeTracking();
+			}
+		}
+
+		/// <summary>
+		/// 
+		/// </summary>
+		/// <param name="scriptPubKey"></param>
+		/// <param name="receivedTransactions">int: block height</param>
+		/// <param name="spentTransactions">int: block height</param>
+		/// <returns></returns>
+		public static bool TryFindAllChainAndMemPoolTransactions(Script scriptPubKey, out HashSet<SmartTransaction> receivedTransactions, out HashSet<SmartTransaction> spentTransactions)
 	    {
 			var found = false;
 			receivedTransactions = new HashSet<SmartTransaction>();
@@ -518,6 +517,45 @@ namespace HBitcoin.FullBlockSpv
 
 		    return found;
 		}
+
+		public static bool TryGetHeader(Height height, out ChainedBlock creationHeader)
+		{
+			creationHeader = null;
+			try
+			{
+				if (_connectionParameters == null)
+					return false;
+
+				creationHeader = HeaderChain.GetBlock(height);
+
+				if (creationHeader == null)
+					return false;
+				else return true;
+			}
+			catch
+			{
+				return false;
+			}
+		}
+
+		public static bool TryGetHeaderHeight(out Height height)
+		{
+			height = Height.Unknown;
+			try
+			{
+				if (_connectionParameters == null)
+					return false;
+
+				height = new Height(HeaderChain.Height);
+				return true;
+			}
+			catch
+			{
+				return false;
+			}
+		}
+
+		#endregion
 
 		#region BlockPulling
 		private static async Task BlockPullerJobAsync(CancellationToken ctsToken)
@@ -701,43 +739,6 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 		#endregion
-
-	    public static bool TryGetHeader(Height height, out ChainedBlock creationHeader)
-	    {
-		    creationHeader = null;
-		    try
-		    {
-			    if(_connectionParameters == null)
-				    return false;
-
-			    creationHeader = HeaderChain.GetBlock(height);
-
-				if (creationHeader == null)
-					return false;
-				else return true;
-		    }
-		    catch
-		    {
-				return false;
-		    }
-	    }
-
-	    public static bool TryGetHeaderHeight(out Height height)
-	    {
-		    height = Height.Unknown;
-		    try
-		    {
-			    if(_connectionParameters == null)
-				    return false;
-
-			    height = new Height(HeaderChain.Height);
-			    return true;
-		    }
-		    catch
-		    {
-				return false;
-		    }
-	    }
 
 		#region TransactionSending
 
@@ -1147,13 +1148,5 @@ namespace HBitcoin.FullBlockSpv
 		}
 
 		#endregion
-	}
-
-	internal class InsufficientBalanceException : Exception
-	{
-		public InsufficientBalanceException()
-		{
-			
-		}
 	}
 }

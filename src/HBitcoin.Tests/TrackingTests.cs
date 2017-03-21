@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using HBitcoin.FullBlockSpv;
+using HBitcoin.Models;
 using NBitcoin;
 using Xunit;
 

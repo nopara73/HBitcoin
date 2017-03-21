@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using HBitcoin.Models;
 using NBitcoin;
 
-namespace HBitcoin.FullBlockSpv
+namespace HBitcoin.Models
 {
     public class SmartTransaction: IEquatable<SmartTransaction>
 	{

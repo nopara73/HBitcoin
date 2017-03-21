@@ -5,7 +5,7 @@ using ConcurrentCollections;
 using HBitcoin.Models;
 using NBitcoin;
 
-namespace HBitcoin.FullBlockSpv
+namespace HBitcoin.Models
 {
 	public class SmartMerkleBlock : IEquatable<SmartMerkleBlock>, IComparable<SmartMerkleBlock>
 	{
