@@ -10,9 +10,10 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ConcurrentCollections;
+using HBitcoin.Helpers;
 using HBitcoin.KeyManagement;
 using HBitcoin.MemPool;
-using HBitcoin.WalletDisplay;
+using HBitcoin.Models;
 using NBitcoin;
 using NBitcoin.Protocol;
 using NBitcoin.Protocol.Behaviors;
@@ -32,25 +33,19 @@ namespace HBitcoin.FullBlockSpv
 		private static QBitNinjaClient _qBitClient;
 		private static HttpClient _httpClient;
 
-		private static int _CreationHeight = -1;
-
-		/// <summary>
-		/// -1 if unknown (eg. the header chain is not there yet)
-		/// </summary>
-		public static int CreationHeight
+		private static Height _CreationHeight = Height.Unknown;
+		
+		public static Height CreationHeight
 		{
 			get
 			{
 				// it's enough to estimate once
-				if(_CreationHeight != -1) return _CreationHeight;
+				if(_CreationHeight != Height.Unknown) return _CreationHeight;
 				else return _CreationHeight = FindSafeCreationHeight();
 			}
 		}
 
-		/// <summary>
-		/// -1 if unknown (eg. the header chain is not there yet)
-		/// </summary>
-		private static int FindSafeCreationHeight()
+		private static Height FindSafeCreationHeight()
 		{
 			try
 			{
@@ -59,11 +54,11 @@ namespace HBitcoin.FullBlockSpv
 
 				// the chain didn't catch up yet
 				if(currTime < Safe.EarliestPossibleCreationTime)
-					return -1;
+					return Height.Unknown;
 
 				// the chain didn't catch up yet
 				if(currTime < Safe.CreationTime)
-					return -1;
+					return Height.Unknown;
 
 				while(currTime > Safe.CreationTime)
 				{
@@ -72,15 +67,17 @@ namespace HBitcoin.FullBlockSpv
 				}
 
 				// when the current tip time is lower than the creation time of the safe let's estimate that to be the creation height
-				return currTip.Height;
+				return new Height(currTip.Height);
 			}
 			catch
 			{
-				return -1;
+				return Height.Unknown;
 			}
 		}
 
-		public static int BestHeight => Tracker.BestHeight;
+		public static Height BestHeight => Tracker.BestHeight;
+		public static event EventHandler BestHeightChanged;
+		private static void OnBestHeightChanged() => BestHeightChanged?.Invoke(null, EventArgs.Empty);
 
 		public static int ConnectedNodeCount
 		{
@@ -104,7 +101,6 @@ namespace HBitcoin.FullBlockSpv
 		private static void OnConnectedNodeCountChanged() => ConnectedNodeCountChanged?.Invoke(null, EventArgs.Empty);
 
 		private static WalletState _state;
-
 		public static WalletState State
 		{
 			get { return _state; }
@@ -115,7 +111,6 @@ namespace HBitcoin.FullBlockSpv
 				OnStateChanged();
 			}
 		}
-
 		public static event EventHandler StateChanged;
 		private static void OnStateChanged() => StateChanged?.Invoke(null, EventArgs.Empty);
 
@@ -148,7 +143,7 @@ namespace HBitcoin.FullBlockSpv
 				// todo: the mempool could note when it seen the transaction the first time
 				record.TimeStamp = !transaction.Confirmed
 					? DateTimeOffset.UtcNow
-					: HeaderChain.GetBlock(transaction.Height.Value).Header.BlockTime;
+					: HeaderChain.GetBlock(transaction.Height).Header.BlockTime;
 
 				record.Amount = Money.Zero; //for now
 
@@ -397,12 +392,14 @@ namespace HBitcoin.FullBlockSpv
 
 			Nodes.ConnectedNodes.Removed += delegate { OnConnectedNodeCountChanged(); };
 			Nodes.ConnectedNodes.Added += delegate { OnConnectedNodeCountChanged(); };
+
+			Tracker.BestHeightChanged += delegate { OnBestHeightChanged(); };
 		}
 
 		private static void MemPoolJob_NewTransaction(object sender, NewTransactionEventArgs e)
 		{
 			if(
-				Tracker.ProcessTransaction(new SmartTransaction(e.Transaction, new TransactionHeight(TransactionHeightType.MemPool))))
+				Tracker.ProcessTransaction(new SmartTransaction(e.Transaction, Height.MemPool)))
 			{
 				UpdateSafeTracking();
 			}
@@ -536,7 +533,7 @@ namespace HBitcoin.FullBlockSpv
 				    }
 
 				    // the headerchain didn't catch up to the creationheight yet
-				    if(CreationHeight == -1)
+				    if(CreationHeight == Height.Unknown)
 				    {
 					    await Task.Delay(1000, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
 					    continue;
@@ -548,7 +545,7 @@ namespace HBitcoin.FullBlockSpv
 					    continue;
 				    }
 
-				    int height;
+				    Height height;
 				    if(Tracker.BlockCount == 0)
 				    {
 					    height = CreationHeight;
@@ -556,14 +553,14 @@ namespace HBitcoin.FullBlockSpv
 				    else
 					{
 						int headerChainHeight = HeaderChain.Height;
-						int trackerBestHeight = Tracker.BestHeight;
-						int unprocessedBlockBestHeight = Tracker.UnprocessedBlockBuffer.BestHeight;
+						Height trackerBestHeight = Tracker.BestHeight;
+						Height unprocessedBlockBestHeight = Tracker.UnprocessedBlockBuffer.BestHeight;
 						if (headerChainHeight <= trackerBestHeight)
 					    {
 						    await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
 						    continue;
 					    }
-					    else if(headerChainHeight <= unprocessedBlockBestHeight)
+					    else if(unprocessedBlockBestHeight.Type == HeightType.Chain && (headerChainHeight <= unprocessedBlockBestHeight))
 					    {
 						    await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
 						    continue;
@@ -574,8 +571,19 @@ namespace HBitcoin.FullBlockSpv
 						    continue;
 					    }
 					    else
-					    {
-						    height = Math.Max(trackerBestHeight, unprocessedBlockBestHeight) + 1;
+						{
+							int relevant = unprocessedBlockBestHeight.Type == HeightType.Chain 
+								? unprocessedBlockBestHeight.Value : 0;
+
+						    if(trackerBestHeight.Type != HeightType.Chain)
+						    {
+								await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+								continue;
+							}
+
+							height = new Height(
+								Math.Max(trackerBestHeight.Value, relevant)
+								+ 1);
 					    }
 				    }
 
@@ -609,7 +617,7 @@ namespace HBitcoin.FullBlockSpv
 					    continue;
 				    }
 
-				    Tracker.AddOrReplaceBlock(chainedBlock.Height, block);
+				    Tracker.AddOrReplaceBlock(new Height(chainedBlock.Height), block);
 			    }
 				catch (Exception ex)
 				{
@@ -647,8 +655,8 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-	    private static int _savedHeaderHeight = -1;
-	    private static int _savedTrackingHeight = -1;
+	    private static Height _savedHeaderHeight = Height.Unknown;
+	    private static Height _savedTrackingHeight = Height.Unknown;
 
 	    private static async Task SaveAllChangedAsync()
 	    {
@@ -660,9 +668,8 @@ namespace HBitcoin.FullBlockSpv
 
 				if (_connectionParameters != null)
 			    {
-				    var headerHeight = HeaderChain.Height;
-					if (_savedHeaderHeight == -1) _savedHeaderHeight = headerHeight;
-				    if(headerHeight > _savedHeaderHeight)
+				    var headerHeight = new Height(HeaderChain.Height);
+					if(_savedHeaderHeight == Height.Unknown || headerHeight > _savedHeaderHeight)
 				    {
 					    SaveHeaderChain();
 						Debug.WriteLine($"Saved {nameof(HeaderChain)} at height: {headerHeight}");
@@ -676,14 +683,15 @@ namespace HBitcoin.FullBlockSpv
 		    }
 
 		    var trackingHeight = BestHeight;
-		    if(_savedTrackingHeight == -1) _savedTrackingHeight = trackingHeight;
-		    if(trackingHeight > _savedTrackingHeight)
+		    if(trackingHeight.Type == HeightType.Chain
+				&& (_savedTrackingHeight == Height.Unknown
+					|| trackingHeight > _savedTrackingHeight))
 		    {
 			    await Tracker.SaveAsync(_trackerFolderPath).ConfigureAwait(false);
-				Debug.WriteLine($"Saved {nameof(Tracker)} at height: {trackingHeight}");
+			    Debug.WriteLine($"Saved {nameof(Tracker)} at height: {trackingHeight}");
 			    _savedTrackingHeight = trackingHeight;
 		    }
-		}
+	    }
 
 	    private static void SaveHeaderChain()
 		{
@@ -694,7 +702,7 @@ namespace HBitcoin.FullBlockSpv
 		}
 		#endregion
 
-	    public static bool TryGetHeader(int height, out ChainedBlock creationHeader)
+	    public static bool TryGetHeader(Height height, out ChainedBlock creationHeader)
 	    {
 		    creationHeader = null;
 		    try
@@ -714,15 +722,15 @@ namespace HBitcoin.FullBlockSpv
 		    }
 	    }
 
-	    public static bool TryGetHeaderHeight(out int height)
+	    public static bool TryGetHeaderHeight(out Height height)
 	    {
-		    height = default(int);
+		    height = Height.Unknown;
 		    try
 		    {
 			    if(_connectionParameters == null)
 				    return false;
 
-			    height = HeaderChain.Height;
+			    height = new Height(HeaderChain.Height);
 			    return true;
 		    }
 		    catch
@@ -1029,7 +1037,7 @@ namespace HBitcoin.FullBlockSpv
 				.TrackedTransactions
 				.Where(x => 
 				(allowUnconfirmed || x.Confirmed) 
-				&& x.Height.Type != TransactionHeightType.NotPropagated))
+				&& x.Height.Type != HeightType.Unknown))
 			{
 				foreach(var coin in tx.Transaction.Outputs.AsCoins())
 				{
@@ -1050,7 +1058,7 @@ namespace HBitcoin.FullBlockSpv
 
 		private static bool IsUnspent(Coin coin) => Tracker
 			.TrackedTransactions
-			.Where(x => x.Height.Type == TransactionHeightType.Chain || x.Height.Type == TransactionHeightType.MemPool)
+			.Where(x => x.Height.Type == HeightType.Chain || x.Height.Type == HeightType.MemPool)
 			.SelectMany(x => x.Transaction.Inputs)
 			.All(txin => txin.PrevOut != coin.Outpoint);
 

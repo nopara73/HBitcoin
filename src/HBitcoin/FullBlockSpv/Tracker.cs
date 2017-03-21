@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ConcurrentCollections;
+using HBitcoin.Models;
 using NBitcoin;
 
 namespace HBitcoin.FullBlockSpv
@@ -84,8 +85,20 @@ namespace HBitcoin.FullBlockSpv
 
 	    public readonly UnprocessedBlockBuffer UnprocessedBlockBuffer = new UnprocessedBlockBuffer();
 
-		public int WorstHeight => MerkleChain.Count == 0 ? -1 : MerkleChain.Select(block => block.Height).Min();
-		public int BestHeight => MerkleChain.Count == 0 ? -1 : MerkleChain.Select(block => block.Height).Max();
+		private static Height _bestHeight = Height.Unknown;
+		public static Height BestHeight
+		{
+			get { return _bestHeight; }
+			private set
+			{
+				if (_bestHeight == value) return;
+				_bestHeight = value;
+				OnBestHeightChanged();
+			}
+		}
+		public static event EventHandler BestHeightChanged;
+		private static void OnBestHeightChanged() => BestHeightChanged?.Invoke(null, EventArgs.Empty);
+
 		public int BlockCount => MerkleChain.Count;
 
 		#endregion
@@ -122,16 +135,14 @@ namespace HBitcoin.FullBlockSpv
 			// remove the last block
 			if (MerkleChain.Count != 0)
 			{
-				SmartMerkleBlock bestMerkleBlock = MerkleChain.FirstOrDefault(x => x.Height == BestHeight);
-
-				if(default(SmartMerkleBlock) != bestMerkleBlock)
+				if(MerkleChain.TryRemove(MerkleChain.Max()))
 				{
-					MerkleChain.TryRemove(bestMerkleBlock);
+					BestHeight = MerkleChain.Max().Height;
 				}
 			}
 		}
 
-	    public void AddOrReplaceBlock(int height, Block block)
+	    public void AddOrReplaceBlock(Height height, Block block)
 	    {
 		    UnprocessedBlockBuffer.TryAddOrReplace(height, block);
 	    }
@@ -179,7 +190,7 @@ namespace HBitcoin.FullBlockSpv
 		}
 
 		/// <returns>transactions it processed, empty if not processed any</returns>
-		private HashSet<SmartTransaction> ProcessTransactions(IEnumerable<Transaction> transactions, TransactionHeight height)
+		private HashSet<SmartTransaction> ProcessTransactions(IEnumerable<Transaction> transactions, Height height)
 		{
 			var processedTransactions = new HashSet<SmartTransaction>();
 			try
@@ -214,12 +225,20 @@ namespace HBitcoin.FullBlockSpv
 		}
 
 		/// <returns>transactions it processed, empty if not processed any</returns>
-		private HashSet<SmartTransaction> ProcessBlock(int height, Block block)
+		private HashSet<SmartTransaction> ProcessBlock(Height height, Block block)
 		{
-			var foundTransactions = ProcessTransactions(block.Transactions, new TransactionHeight(height));
+			var foundTransactions = ProcessTransactions(block.Transactions, height);
 
 			var smartMerkleBlock = new SmartMerkleBlock(height, block, foundTransactions.Select(x => x.GetHash()).ToArray());
+
+			var sameHeights = MerkleChain.Where(x => x.Height == height);
+			foreach (var elem in sameHeights)
+			{
+				MerkleChain.TryRemove(elem);
+			}
+
 			MerkleChain.Add(smartMerkleBlock);
+			BestHeight = height;
 
 			return foundTransactions;
 		}
@@ -228,7 +247,7 @@ namespace HBitcoin.FullBlockSpv
 
 		private void UnprocessedBlockBuffer_HaveBlocks(object sender, EventArgs e)
 		{
-			int height;
+			Height height;
 			Block block;
 			while (UnprocessedBlockBuffer.TryGetAndRemoveOldest(out height, out block))
 			{
@@ -324,7 +343,7 @@ namespace HBitcoin.FullBlockSpv
 					{
 						var pieces = line.Split(':');
 						var height = int.Parse(pieces[1]);
-						TrackedTransactions.TryAdd(new SmartTransaction(new Transaction(pieces[0]), new TransactionHeight(height)));
+						TrackedTransactions.TryAdd(new SmartTransaction(new Transaction(pieces[0]), new Height(height)));
 					}
 				}
 
@@ -336,6 +355,7 @@ namespace HBitcoin.FullBlockSpv
 						SmartMerkleBlock smartMerkleBlock = SmartMerkleBlock.FromBytes(block);
 						MerkleChain.Add(smartMerkleBlock);
 					}
+					BestHeight = MerkleChain.Max().Height;
 				}
 			}
 			finally

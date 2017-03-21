@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using HBitcoin.Models;
 using NBitcoin;
 
 namespace HBitcoin.FullBlockSpv
@@ -11,8 +12,7 @@ namespace HBitcoin.FullBlockSpv
     public class UnprocessedBlockBuffer
     {
 	    public const int Capacity = 50;
-		// int is the height
-		private readonly ConcurrentObservableDictionary<int, Block> _blocks = new ConcurrentObservableDictionary<int, Block>();
+		private readonly ConcurrentObservableDictionary<Height, Block> _blocks = new ConcurrentObservableDictionary<Height, Block>();
 
 		public event EventHandler HaveBlocks;
 		private void OnHaveBlocks() => HaveBlocks?.Invoke(this, EventArgs.Empty);
@@ -23,7 +23,7 @@ namespace HBitcoin.FullBlockSpv
 		/// <param name="height"></param>
 		/// <param name="block"></param>
 		/// <returns>false if we have more than UnprocessedBlockBuffer.Capacity blocks in memory already</returns>
-		public bool TryAddOrReplace(int height, Block block)
+		public bool TryAddOrReplace(Height height, Block block)
 	    {
 			if (_blocks.Count > Capacity) return false;
 			
@@ -34,18 +34,15 @@ namespace HBitcoin.FullBlockSpv
 	    }
 
 	    public bool Full => _blocks.Count == Capacity;
-		/// <summary>
-		/// -1 if empty
-		/// </summary>
-	    public int BestHeight => _blocks.Count == 0 ? -1 : _blocks.Keys.Max();
+	    public Height BestHeight => _blocks.Count == 0 ? Height.Unknown : _blocks.Keys.Max();
 
 	    /// <summary>
 	    /// 
 	    /// </summary>
 	    /// <returns>false if empty</returns>
-	    public bool TryGetAndRemoveOldest(out int height, out Block block)
+	    public bool TryGetAndRemoveOldest(out Height height, out Block block)
 	    {
-		    height = default(int);
+		    height = Height.Unknown;
 		    block = default(Block);
 		    if(_blocks.Count == 0) return false;
 

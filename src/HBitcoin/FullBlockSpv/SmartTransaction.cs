@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HBitcoin.Models;
 using NBitcoin;
 
 namespace HBitcoin.FullBlockSpv
@@ -10,10 +11,10 @@ namespace HBitcoin.FullBlockSpv
 	{
 		#region Members
 		
-		public TransactionHeight Height { get; }
+		public Height Height { get; }
 		public Transaction Transaction { get; }
 
-		public bool Confirmed => Height.Type == TransactionHeightType.Chain;
+		public bool Confirmed => Height.Type == HeightType.Chain;
 		public uint256 GetHash() => Transaction.GetHash();
 
 		#endregion
@@ -25,7 +26,7 @@ namespace HBitcoin.FullBlockSpv
 
 		}
 		
-		public SmartTransaction(Transaction transaction, TransactionHeight height)
+		public SmartTransaction(Transaction transaction, Height height)
 		{
 			Height = height;
 			Transaction = transaction;

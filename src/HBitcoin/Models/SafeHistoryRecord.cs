@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using HBitcoin.FullBlockSpv;
 using NBitcoin;
 
-namespace HBitcoin.WalletDisplay
+namespace HBitcoin.Models
 {
     public class SafeHistoryRecord
     {
@@ -38,14 +38,14 @@ namespace HBitcoin.WalletDisplay
 			get { return _amount; }
 			set { SetField(ref _amount, value); }
 		}
-		private TransactionHeight _blockHeight;
-		public TransactionHeight BlockHeight
+		private Height _blockHeight;
+		public Height BlockHeight
 		{
 			get { return _blockHeight; }
 			set { SetField(ref _blockHeight, value); }
 		}
 
-		public bool Confirmed => BlockHeight.Type == TransactionHeightType.Chain;
+		public bool Confirmed => BlockHeight.Type == HeightType.Chain;
 
 		private uint256 _transactionId;
 		public uint256 TransactionId

@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HBitcoin.FullBlockSpv;
 using HBitcoin.KeyManagement;
-using HBitcoin.WalletDisplay;
+using HBitcoin.Models;
 using NBitcoin;
 using Xunit;
 using Xunit.Abstractions;
@@ -33,7 +33,7 @@ namespace HBitcoin.Tests
 			if(File.Exists(path))
 			{
 				safe = Safe.Load(password, path);
-				Assert.Equal(safe.Network, network);
+				safe.Delete();
 			}
 			else
 			{
@@ -65,6 +65,7 @@ namespace HBitcoin.Tests
 				{
 					synced = true;
 				}
+				else synced = false;
 			};
 			Assert.True(WalletJob.SafeAccounts.Count == 0);
 			Assert.True(WalletJob.ConnectedNodeCount == 0);
@@ -78,7 +79,7 @@ namespace HBitcoin.Tests
 			var cts = new CancellationTokenSource();
 			var walletJobTask = WalletJob.StartAsync(cts.Token);
 			Assert.True(WalletJob.State != WalletState.NotStarted);
-			Task reportTask = ReportAsync(cts.Token);
+			Task reportTask = Helpers.ReportAsync(cts.Token);
 
 			try
 			{
@@ -94,16 +95,15 @@ namespace HBitcoin.Tests
 				}
 
 				Assert.True(WalletJob.State == WalletState.Synced);
-				Assert.True(WalletJob.CreationHeight != -1);
+				Assert.True(WalletJob.CreationHeight != Height.Unknown);
 				Assert.True(WalletJob.Tracker.TrackedTransactions.Count == 0);
 				Assert.True(!WalletJob.GetSafeHistory().Any());
-				int headerHeight;
+				Height headerHeight;
 				Assert.True(WalletJob.TryGetHeaderHeight(out headerHeight));
-				var expectedBlockCount = headerHeight - WalletJob.CreationHeight + 1;
+				var expectedBlockCount = headerHeight.Value - WalletJob.CreationHeight.Value + 1;
 				Assert.True(WalletJob.Tracker.BlockCount == expectedBlockCount);
 				Assert.True(WalletJob.Tracker.TrackedScriptPubKeys.Count > 0);
 				Assert.True(WalletJob.Tracker.TrackedTransactions.Count == 0);
-				Assert.True(WalletJob.Tracker.WorstHeight == WalletJob.CreationHeight);
 			}
 			finally
 			{
@@ -112,44 +112,6 @@ namespace HBitcoin.Tests
 			}
 		}
 
-		private static int _prevHeight = 0;
-		private static int _prevHeaderHeight = 0;
-
-		private static async Task ReportAsync(CancellationToken ctsToken)
-		{
-			while (true)
-			{
-				if (ctsToken.IsCancellationRequested) return;
-				try
-				{
-					await Task.Delay(1000, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
-
-					int currHeaderHeight;
-					if(WalletJob.TryGetHeaderHeight(out currHeaderHeight))
-					{
-						// HEADERCHAIN
-						if (currHeaderHeight > _prevHeaderHeight)
-						{
-							Debug.WriteLine($"HeaderChain height: {currHeaderHeight}");
-							_prevHeaderHeight = currHeaderHeight;
-						}
-
-						// TRACKER
-						var currHeight = WalletJob.BestHeight;
-						if (currHeight > _prevHeight)
-						{
-							Debug.WriteLine($"Tracker height: {currHeight}");
-							_prevHeight = currHeight;
-						}
-					}
-				}
-				catch
-				{
-					// ignored
-				}
-			}
-		}
-		
 		[Fact]
 		public void HaveFundsTest()
 		{
@@ -163,7 +125,6 @@ namespace HBitcoin.Tests
 
 			// create walletjob
 			WalletJob.Init(safe);
-			var synced = false;
 			// note some event
 			WalletJob.ConnectedNodeCountChanged += delegate
 			{
@@ -177,22 +138,17 @@ namespace HBitcoin.Tests
 			WalletJob.StateChanged += delegate
 			{
 				Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
-				if(WalletJob.State == WalletState.Synced)
-				{
-					synced = true;
-				}
 			};
 
 			// start syncing
 			var cts = new CancellationTokenSource();
 			var walletJobTask = WalletJob.StartAsync(cts.Token);
-			Task reportTask = ReportAsync(cts.Token);
+			Task reportTask = Helpers.ReportAsync(cts.Token);
 
 			try
 			{
-				// wait until fully synced
-
-				while(!synced)
+				// wait until synced enough to have our transaction
+				while (WalletJob.BestHeight.Type != HeightType.Chain || WalletJob.BestHeight < 1092448)
 				{
 					Task.Delay(1000).Wait();
 				}
@@ -258,7 +214,7 @@ namespace HBitcoin.Tests
 			// start syncing
 			var cts = new CancellationTokenSource();
 			var walletJobTask = WalletJob.StartAsync(cts.Token);
-			Task reportTask = ReportAsync(cts.Token);
+			Task reportTask = Helpers.ReportAsync(cts.Token);
 
 			try
 			{
@@ -268,11 +224,11 @@ namespace HBitcoin.Tests
 					Task.Delay(1000).Wait();
 				}
 
-				ReportFullHistory();
+				Helpers.ReportFullHistory();
 
 				// 0. Query all operations, grouped our used safe addresses
 				int MinUnusedKeyNum = 37;
-				Dictionary<BitcoinAddress, List<BalanceOperation>> operationsPerAddresses = QueryOperationsPerSafeAddressesAsync(new QBitNinjaClient(safe.Network), safe, MinUnusedKeyNum).Result;
+				Dictionary<BitcoinAddress, List<BalanceOperation>> operationsPerAddresses = Helpers.QueryOperationsPerSafeAddressesAsync(new QBitNinjaClient(safe.Network), safe, MinUnusedKeyNum).Result;
 
 				Dictionary<uint256, List<BalanceOperation>> operationsPerTransactions = QBitNinjaJutsus.GetOperationsPerTransactions(operationsPerAddresses);
 
@@ -332,126 +288,6 @@ namespace HBitcoin.Tests
 				cts.Cancel();
 				Task.WhenAll(reportTask, walletJobTask).Wait();
 			}
-		}
-
-		public static async Task<Dictionary<BitcoinAddress, List<BalanceOperation>>> QueryOperationsPerSafeAddressesAsync(QBitNinjaClient client, Safe safe, int minUnusedKeys = 7, HdPathType? hdPathType = null)
-		{
-			if (hdPathType == null)
-			{
-				var t1 = QueryOperationsPerSafeAddressesAsync(client, safe, minUnusedKeys, HdPathType.Receive);
-				var t2 = QueryOperationsPerSafeAddressesAsync(client, safe, minUnusedKeys, HdPathType.Change);
-				var t3 = QueryOperationsPerSafeAddressesAsync(client, safe, minUnusedKeys, HdPathType.NonHardened);
-
-				await Task.WhenAll(t1, t2, t3).ConfigureAwait(false);
-
-				Dictionary<BitcoinAddress, List<BalanceOperation>> operationsPerReceiveAddresses = await t1.ConfigureAwait(false);
-				Dictionary<BitcoinAddress, List<BalanceOperation>> operationsPerChangeAddresses = await t2.ConfigureAwait(false);
-				Dictionary<BitcoinAddress, List<BalanceOperation>> operationsPerNonHardenedAddresses = await t3.ConfigureAwait(false);
-
-				var operationsPerAllAddresses = new Dictionary<BitcoinAddress, List<BalanceOperation>>();
-				foreach (var elem in operationsPerReceiveAddresses)
-					operationsPerAllAddresses.Add(elem.Key, elem.Value);
-				foreach (var elem in operationsPerChangeAddresses)
-					operationsPerAllAddresses.Add(elem.Key, elem.Value);
-				foreach (var elem in operationsPerNonHardenedAddresses)
-					operationsPerAllAddresses.Add(elem.Key, elem.Value);
-
-				return operationsPerAllAddresses;
-			}
-
-			var addresses = safe.GetFirstNAddresses(minUnusedKeys, hdPathType.GetValueOrDefault());
-			//var addresses = FakeData.FakeSafe.GetFirstNAddresses(minUnusedKeys);
-
-			var operationsPerAddresses = new Dictionary<BitcoinAddress, List<BalanceOperation>>();
-			var unusedKeyCount = 0;
-			foreach (var elem in await QueryOperationsPerAddressesAsync(client, addresses).ConfigureAwait(false))
-			{
-				operationsPerAddresses.Add(elem.Key, elem.Value);
-				if (elem.Value.Count == 0) unusedKeyCount++;
-			}
-
-			Debug.WriteLine($"{operationsPerAddresses.Count} {hdPathType} keys are processed.");
-
-			var startIndex = minUnusedKeys;
-			while (unusedKeyCount < minUnusedKeys)
-			{
-				addresses = new List<BitcoinAddress>();
-				for (int i = startIndex; i < startIndex + minUnusedKeys; i++)
-				{
-					addresses.Add(safe.GetAddress(i, hdPathType.GetValueOrDefault()));
-					//addresses.Add(FakeData.FakeSafe.GetAddress(i));
-				}
-				foreach (var elem in await QueryOperationsPerAddressesAsync(client, addresses).ConfigureAwait(false))
-				{
-					operationsPerAddresses.Add(elem.Key, elem.Value);
-					if (elem.Value.Count == 0) unusedKeyCount++;
-				}
-
-				Debug.WriteLine($"{operationsPerAddresses.Count} {hdPathType} keys are processed.");
-				startIndex += minUnusedKeys;
-			}
-
-			return operationsPerAddresses;
-		}
-
-		public static async Task<Dictionary<BitcoinAddress, List<BalanceOperation>>> QueryOperationsPerAddressesAsync(QBitNinjaClient client, IEnumerable<BitcoinAddress> addresses)
-		{
-			var operationsPerAddresses = new Dictionary<BitcoinAddress, List<BalanceOperation>>();
-
-			var addressList = addresses.ToList();
-			var balanceModelList = new List<BalanceModel>();
-
-			foreach (var balance in await GetBalancesAsync(client, addressList, unspentOnly: false).ConfigureAwait(false))
-			{
-				balanceModelList.Add(balance);
-			}
-
-			for (var i = 0; i < balanceModelList.Count; i++)
-			{
-				operationsPerAddresses.Add(addressList[i], balanceModelList[i].Operations);
-			}
-
-			return operationsPerAddresses;
-		}
-
-		private static async Task<IEnumerable<BalanceModel>> GetBalancesAsync(QBitNinjaClient client, IEnumerable<BitcoinAddress> addresses, bool unspentOnly)
-		{
-			var tasks = new HashSet<Task<BalanceModel>>();
-			foreach (var dest in addresses)
-			{
-				var task = client.GetBalance(dest, unspentOnly);
-
-				tasks.Add(task);
-			}
-
-			await Task.WhenAll(tasks).ConfigureAwait(false);
-
-			var results = new HashSet<BalanceModel>();
-			foreach (var task in tasks)
-				results.Add(await task.ConfigureAwait(false));
-
-			return results;
-		}
-
-		private static void ReportFullHistory()
-		{
-			var history = WalletJob.GetSafeHistory();
-			if (!history.Any())
-			{
-				Debug.WriteLine("Wallet has no history...");
-				return;
-			}
-
-			Debug.WriteLine("");
-			Debug.WriteLine("---------------------------------------------------------------------------");
-			Debug.WriteLine(@"Date			Amount		Confirmed	Transaction Id");
-			Debug.WriteLine("---------------------------------------------------------------------------");
-			
-			foreach (var record in history)
-			{
-				Debug.WriteLine($@"{record.TimeStamp.DateTime}	{record.Amount}	{record.Confirmed}		{record.TransactionId}");
-			}
-			Debug.WriteLine("");
 		}
 	}
 }
