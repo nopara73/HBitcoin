@@ -68,7 +68,7 @@ namespace HBitcoin.Tests
 				var receive = walletJob.GetUnusedScriptPubKeys(account, HdPathType.Receive).FirstOrDefault();
 
 				IDictionary<Coin, bool> unspentCoins;
-				var bal = walletJob.GetBalance(out unspentCoins, account, allowUnconfirmed: true);
+				var bal = walletJob.GetBalance(out unspentCoins, account);
 				Money amountToSend = (bal.Confirmed + bal.Unconfirmed) / 2;
 				var res = walletJob.BuildTransactionAsync(receive, amountToSend, Models.FeeType.Low, account,
 					allowUnconfirmed: true).Result;

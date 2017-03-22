@@ -775,12 +775,14 @@ namespace HBitcoin.FullBlockSpv
 				// 3. How much money we can spend?
 				Debug.WriteLine("Calculating available amount...");
 				IDictionary<Coin, bool> unspentCoins;
-				AvailableAmount balance = GetBalance(out unspentCoins, account, allowUnconfirmed);
-				var availableAmount = balance.Confirmed;
-				var unconfirmedAvailableAmount = balance.Unconfirmed;
-				Debug.WriteLine($"Available amount: {availableAmount}");
+				AvailableAmount balance = GetBalance(out unspentCoins, account);
+				Money spendableConfirmedAmount = balance.Confirmed;
+				Money spendableUnconfirmedAmount = 
+					allowUnconfirmed ? balance.Unconfirmed : Money.Zero;
+				Debug.WriteLine($"Spendable confirmed amount: {spendableConfirmedAmount}");
+				Debug.WriteLine($"Spendable unconfirmed amount: {spendableConfirmedAmount}");
 
-				BuildTransactionResult successfulResult = new BuildTransactionResult()
+				BuildTransactionResult successfulResult = new BuildTransactionResult
 				{
 					Success = true,
 					FailingReason = ""
@@ -837,7 +839,7 @@ namespace HBitcoin.FullBlockSpv
 				Money amountToSend = null;
 				if (spendAll)
 				{
-					amountToSend = availableAmount;
+					amountToSend = spendableConfirmedAmount;
 					amountToSend -= fee;
 				}
 				else
@@ -846,12 +848,24 @@ namespace HBitcoin.FullBlockSpv
 				}
 
 				// 6. Do some checks
-				if (amountToSend < Money.Zero || availableAmount < amountToSend + fee)
-					return new BuildTransactionResult
+				if (amountToSend < Money.Zero)
+				{
+					return NotEnoughFundsBuildTransactionResult;
+				}
+				if(allowUnconfirmed)
+				{
+					if(spendableConfirmedAmount + spendableUnconfirmedAmount < amountToSend + fee)
 					{
-						Success = false,
-						FailingReason = "Not enough funds"
-					};
+						return NotEnoughFundsBuildTransactionResult;
+					}
+				}
+				else
+				{
+					if (spendableConfirmedAmount < amountToSend + fee)
+					{
+						return NotEnoughFundsBuildTransactionResult;
+					}
+				}
 
 				decimal feePc = (100 * fee.ToDecimal(MoneyUnit.BTC)) / amountToSend.ToDecimal(MoneyUnit.BTC);
 				successfulResult.FeePercentOfSent = feePc;
@@ -863,7 +877,7 @@ namespace HBitcoin.FullBlockSpv
 					Debug.WriteLine($"Fee:\t\t {fee.ToDecimal(MoneyUnit.BTC):0.#############################}btc");
 				}
 
-				var confirmedAvailableAmount = availableAmount - unconfirmedAvailableAmount;
+				var confirmedAvailableAmount = spendableConfirmedAmount - spendableUnconfirmedAmount;
 				var totalOutAmount = amountToSend + fee;
 				if (confirmedAvailableAmount < totalOutAmount)
 				{
@@ -915,6 +929,13 @@ namespace HBitcoin.FullBlockSpv
 				};
 			}
 		}
+
+		private static BuildTransactionResult NotEnoughFundsBuildTransactionResult =>
+			new BuildTransactionResult
+		{
+			Success = false,
+			FailingReason = "Not enough funds"
+		};
 
 		public IEnumerable<Script> GetUnusedScriptPubKeys(SafeAccount account = null, HdPathType hdPathType = HdPathType.Receive)
 		{
@@ -993,37 +1014,31 @@ namespace HBitcoin.FullBlockSpv
 			return haveEnough;
 		}
 
-		public AvailableAmount GetBalance(out IDictionary<Coin, bool> unspentCoins, SafeAccount account = null, bool allowUnconfirmed = false)
+		public AvailableAmount GetBalance(out IDictionary<Coin, bool> unspentCoins, SafeAccount account = null)
 		{
 			// 1. Find all coins I can spend from the account
 			Debug.WriteLine("Finding all unspent coins...");
-			unspentCoins = GetUnspentCoins(account, allowUnconfirmed);
+			unspentCoins = GetUnspentCoins(account);
 
 			// 2. How much money we can spend?
-			var availableAmount = Money.Zero;
+			var confirmedAvailableAmount = Money.Zero;
 			var unconfirmedAvailableAmount = Money.Zero;
 			foreach (var elem in unspentCoins)
 			{
-				// If can spend unconfirmed add all
-				if (allowUnconfirmed)
+				// Value true if confirmed
+				if(elem.Value)
 				{
-					availableAmount += elem.Key.Amount as Money;
-					if (!elem.Value)
-						unconfirmedAvailableAmount += elem.Key.Amount as Money;
+					confirmedAvailableAmount += elem.Key.Amount as Money;
 				}
-				// else only add confirmed ones
 				else
 				{
-					if (elem.Value)
-					{
-						availableAmount += elem.Key.Amount as Money;
-					}
+					unconfirmedAvailableAmount += elem.Key.Amount as Money;
 				}
 			}
 
 			return new AvailableAmount
 			{
-				Confirmed = availableAmount,
+				Confirmed = confirmedAvailableAmount,
 				Unconfirmed = unconfirmedAvailableAmount
 			};
 		}
@@ -1046,7 +1061,7 @@ namespace HBitcoin.FullBlockSpv
 		/// <summary>
 		/// Find all unspent transaction output of the account
 		/// </summary>
-		public IDictionary<Coin, bool> GetUnspentCoins(SafeAccount account = null, bool allowUnconfirmed = false)
+		public IDictionary<Coin, bool> GetUnspentCoins(SafeAccount account = null)
 		{
 			AssertAccount(account);
 
@@ -1057,9 +1072,7 @@ namespace HBitcoin.FullBlockSpv
 			// 1. Go through all the transactions and their outputs
 			foreach(SmartTransaction tx in Tracker
 				.TrackedTransactions
-				.Where(x => 
-				(allowUnconfirmed || x.Confirmed) 
-				&& x.Height.Type != HeightType.Unknown))
+				.Where(x => x.Height != Height.Unknown))
 			{
 				foreach(var coin in tx.Transaction.Outputs.AsCoins())
 				{
