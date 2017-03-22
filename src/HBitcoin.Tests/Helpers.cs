@@ -18,7 +18,7 @@ namespace HBitcoin.Tests
 	    public static Height _prevHeight = Height.Unknown;
 	    public static Height _prevHeaderHeight = Height.Unknown;
 
-	    public static async Task ReportAsync(CancellationToken ctsToken)
+	    public static async Task ReportAsync(CancellationToken ctsToken, WalletJob walletJob)
 	    {
 		    while (true)
 		    {
@@ -31,17 +31,17 @@ namespace HBitcoin.Tests
 				    if(WalletJob.TryGetHeaderHeight(out currHeaderHeight))
 				    {
 					    // HEADERCHAIN
-					    if(_prevHeaderHeight == Height.Unknown ||
-							(currHeaderHeight != Height.Unknown && currHeaderHeight > _prevHeaderHeight))
+					    if(currHeaderHeight.Type == HeightType.Chain
+							&& (_prevHeaderHeight == Height.Unknown || currHeaderHeight > _prevHeaderHeight))
 					    {
 						    Debug.WriteLine($"HeaderChain height: {currHeaderHeight}");
 						    _prevHeaderHeight = currHeaderHeight;
 					    }
 
 					    // TRACKER
-					    var currHeight = WalletJob.BestHeight;
-					    if(_prevHeight == Height.Unknown ||
-							(currHeight != Height.Unknown && currHeight > _prevHeight))
+					    var currHeight = walletJob.BestHeight;
+					    if(currHeight.Type == HeightType.Chain
+							&& (_prevHeight == Height.Unknown || currHeight > _prevHeight))
 					    {
 						    Debug.WriteLine($"Tracker height: {currHeight} left: {currHeaderHeight.Value - currHeight.Value}");
 						    _prevHeight = currHeight;
@@ -154,9 +154,9 @@ namespace HBitcoin.Tests
 		    return results;
 	    }
 
-	    public static void ReportFullHistory()
+	    public static void ReportFullHistory(WalletJob walletJob)
 	    {
-		    var history = WalletJob.GetSafeHistory();
+		    var history = walletJob.GetSafeHistory();
 		    if (!history.Any())
 		    {
 			    Debug.WriteLine("Wallet has no history...");

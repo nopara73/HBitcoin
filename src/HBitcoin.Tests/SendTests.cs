@@ -26,8 +26,8 @@ namespace HBitcoin.Tests
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
-			WalletJob.Init(safe, trackDefaultSafe: false, accountsToTrack: account);
-			var synced = false;
+			WalletJob walletJob = new WalletJob(safe, trackDefaultSafe: false, accountsToTrack: account);
+			var syncedOnce = false;
 			// note some event
 			WalletJob.ConnectedNodeCountChanged += delegate
 			{
@@ -38,32 +38,79 @@ namespace HBitcoin.Tests
 				}
 				else Debug.WriteLine($"{nameof(WalletJob.ConnectedNodeCount)}: {WalletJob.ConnectedNodeCount}");
 			};
-			WalletJob.StateChanged += delegate
+			walletJob.StateChanged += delegate
 			{
-				Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
-				if(WalletJob.State == WalletState.Synced)
+				Debug.WriteLine($"{nameof(walletJob.State)}: {walletJob.State}");
+				if(walletJob.State == WalletState.Synced)
 				{
-					synced = true;
+					syncedOnce = true;
 				}
-				else synced = false;
+				else syncedOnce = false;
 			};
 
 			// start syncing
 			var cts = new CancellationTokenSource();
-			var walletJobTask = WalletJob.StartAsync(cts.Token);
-			Task reportTask = Helpers.ReportAsync(cts.Token);
+			var walletJobTask = walletJob.StartAsync(cts.Token);
+			Task reportTask = Helpers.ReportAsync(cts.Token, walletJob);
 
 			try
 			{
 				// wait until fully synced
-				while (!synced)
+				while (!syncedOnce)
 				{
 					Task.Delay(1000).Wait();
 				}
 
-				var record = WalletJob.GetSafeHistory(account).FirstOrDefault();
+				var record = walletJob.GetSafeHistory(account).FirstOrDefault();
 				Debug.WriteLine(record.Confirmed);
 				Debug.WriteLine(record.Amount);
+
+				var receive = walletJob.GetUnusedScriptPubKeys(account, HdPathType.Receive).FirstOrDefault();
+
+				IDictionary<Coin, bool> unspentCoins;
+				var bal = walletJob.GetBalance(out unspentCoins, account, allowUnconfirmed: true);
+				Money amountToSend = (bal.Confirmed + bal.Unconfirmed) / 2;
+				var res = walletJob.BuildTransactionAsync(receive, amountToSend, Models.FeeType.Low, account,
+					allowUnconfirmed: true).Result;
+
+				Assert.True(res.Success);
+				Assert.True(res.FailingReason == "");
+				Debug.WriteLine($"Fee: {res.Fee}");
+				Debug.WriteLine($"FeePercentOfSent: {res.FeePercentOfSent} %");
+				Debug.WriteLine($"SpendsUnconfirmed: {res.SpendsUnconfirmed}");
+				Debug.WriteLine($"Transaction: {res.Transaction}");
+
+				var foundReceive = false;
+				Assert.InRange(res.Transaction.Outputs.Count, 1, 2);
+				foreach(var output in res.Transaction.Outputs)
+				{
+					if(output.ScriptPubKey == receive)
+					{
+						foundReceive = true;
+						Assert.True(amountToSend == output.Value);
+					}
+				}
+				Assert.True(foundReceive);
+
+				var txProbArrived = false;
+				walletJob.Tracker.TrackedTransactions.CollectionChanged += delegate
+				{
+					txProbArrived = true;
+				};
+				
+				var sendRes = WalletJob.SendTransactionAsync(res.Transaction).Result;
+				Assert.True(sendRes.Success);
+				Assert.True(sendRes.FailingReason == "");
+
+				while (txProbArrived == false)
+				{
+					Debug.WriteLine("Waiting for transaction...");
+					Task.Delay(1000).Wait();
+				}
+
+				Debug.WriteLine("TrackedTransactions collection changed");
+				Assert.True(walletJob.Tracker.TrackedTransactions.Any(x => x.Transaction.GetHash() == res.Transaction.GetHash()));
+				Debug.WriteLine("Transaction arrived");
 			}
 			finally
 			{

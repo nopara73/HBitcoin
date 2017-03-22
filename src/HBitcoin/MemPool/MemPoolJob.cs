@@ -40,7 +40,7 @@ namespace HBitcoin.MemPool
 						return;
 					}
 
-					if(WalletJob.Nodes.ConnectedNodes.Count <= 3 || !WalletJob.ChainsInSync)
+					if(WalletJob.Nodes.ConnectedNodes.Count <= 3 || WalletJob.StallMemPool)
 					{
 						await Task.Delay(100, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
 						continue;

@@ -85,8 +85,8 @@ namespace HBitcoin.FullBlockSpv
 
 	    public readonly UnprocessedBlockBuffer UnprocessedBlockBuffer = new UnprocessedBlockBuffer();
 
-		private static Height _bestHeight = Height.Unknown;
-		public static Height BestHeight
+		private Height _bestHeight = Height.Unknown;
+		public Height BestHeight
 		{
 			get { return _bestHeight; }
 			private set
@@ -96,8 +96,8 @@ namespace HBitcoin.FullBlockSpv
 				OnBestHeightChanged();
 			}
 		}
-		public static event EventHandler BestHeightChanged;
-		private static void OnBestHeightChanged() => BestHeightChanged?.Invoke(null, EventArgs.Empty);
+		public event EventHandler BestHeightChanged;
+		private void OnBestHeightChanged() => BestHeightChanged?.Invoke(this, EventArgs.Empty);
 
 		public int BlockCount => MerkleChain.Count;
 

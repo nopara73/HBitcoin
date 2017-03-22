@@ -22,19 +22,21 @@ using Stratis.Bitcoin.BlockPulling;
 
 namespace HBitcoin.FullBlockSpv
 {
-	public static class WalletJob
+	public class WalletJob
 	{
 		#region MembersAndProperties
+		
+		public static Network CurrentNetwork { get; private set; }
 
-		public static Safe Safe { get; private set; }
-		public static bool TracksDefaultSafe { get; private set; }
-		public static ConcurrentHashSet<SafeAccount> SafeAccounts { get; private set; }
+		public Safe Safe { get; private set; }
+		public bool TracksDefaultSafe { get; private set; }
+		public ConcurrentHashSet<SafeAccount> SafeAccounts { get; private set; }
 
 		private static QBitNinjaClient _qBitClient;
 		private static HttpClient _httpClient;
 
-		private static Height _creationHeight;
-		public static Height CreationHeight
+		private Height _creationHeight;
+		public Height CreationHeight
 		{
 			get
 			{
@@ -43,7 +45,7 @@ namespace HBitcoin.FullBlockSpv
 				else return _creationHeight = FindSafeCreationHeight();
 			}
 		}
-		private static Height FindSafeCreationHeight()
+		private Height FindSafeCreationHeight()
 		{
 			try
 			{
@@ -73,9 +75,11 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-		public static Height BestHeight => HeaderChain.Height < Tracker.BestHeight ? Height.Unknown : Tracker.BestHeight;
-		public static event EventHandler BestHeightChanged;
-		private static void OnBestHeightChanged() => BestHeightChanged?.Invoke(null, EventArgs.Empty);
+		public static bool StallMemPool { get; private set; } = true;
+
+		public Height BestHeight => HeaderChain.Height < Tracker.BestHeight ? Height.Unknown : Tracker.BestHeight;
+		public event EventHandler BestHeightChanged;
+		private void OnBestHeightChanged() => BestHeightChanged?.Invoke(this, EventArgs.Empty);
 
 		public static int ConnectedNodeCount
 		{
@@ -96,8 +100,8 @@ namespace HBitcoin.FullBlockSpv
 		public static event EventHandler ConnectedNodeCountChanged;
 		private static void OnConnectedNodeCountChanged() => ConnectedNodeCountChanged?.Invoke(null, EventArgs.Empty);
 
-		private static WalletState _state;
-		public static WalletState State
+		private WalletState _state;
+		public WalletState State
 		{
 			get { return _state; }
 			private set
@@ -107,9 +111,8 @@ namespace HBitcoin.FullBlockSpv
 				OnStateChanged();
 			}
 		}
-		public static event EventHandler StateChanged;
-		private static void OnStateChanged() => StateChanged?.Invoke(null, EventArgs.Empty);
-		public static bool ChainsInSync => Tracker.BestHeight == HeaderChain.Height;
+		public event EventHandler StateChanged;
+		private void OnStateChanged() => StateChanged?.Invoke(this, EventArgs.Empty);
 
 		private static readonly SemaphoreSlim SemaphoreSave = new SemaphoreSlim(1, 1);
 		private static NodeConnectionParameters _connectionParameters;
@@ -117,14 +120,14 @@ namespace HBitcoin.FullBlockSpv
 		private static LookaheadBlockPuller BlockPuller;
 
 		private const string WorkFolderPath = "FullBlockSpvData";
-		private static string _addressManagerFilePath => Path.Combine(WorkFolderPath, $"AddressManager{Safe.Network}.dat");
-		private static string _headerChainFilePath => Path.Combine(WorkFolderPath, $"HeaderChain{Safe.Network}.dat");
-		private static string _trackerFolderPath => Path.Combine(WorkFolderPath, Safe.UniqueId);
+		private static string _addressManagerFilePath => Path.Combine(WorkFolderPath, $"AddressManager{CurrentNetwork}.dat");
+		private static string _headerChainFilePath => Path.Combine(WorkFolderPath, $"HeaderChain{CurrentNetwork}.dat");
+		private string _trackerFolderPath => Path.Combine(WorkFolderPath, Safe.UniqueId);
 
-		private static Tracker _tracker;
-		public static Tracker Tracker => GetTrackerAsync().Result;
+		private Tracker _tracker;
+		public Tracker Tracker => GetTrackerAsync().Result;
 		// This async getter is for clean exception handling
-		private static async Task<Tracker> GetTrackerAsync()
+		private async Task<Tracker> GetTrackerAsync()
 		{
 			// if already in memory return it
 			if (_tracker != null) return _tracker;
@@ -184,7 +187,7 @@ namespace HBitcoin.FullBlockSpv
 						if (chainBehavior != null)
 							return chainBehavior.Chain;
 					}
-				var chain = new ConcurrentChain(Safe.Network);
+				var chain = new ConcurrentChain(CurrentNetwork);
 				SemaphoreSave.Wait();
 				try
 				{
@@ -203,16 +206,16 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-		public static Network Network => Safe.Network;
-
 		#endregion
 
-		public static void Init(Safe safeToTrack, HttpClientHandler handler = null, bool trackDefaultSafe = true, params SafeAccount[] accountsToTrack)
+		public WalletJob(Safe safeToTrack, HttpClientHandler handler = null, bool trackDefaultSafe = true, params SafeAccount[] accountsToTrack)
 		{
 			_creationHeight = Height.Unknown;
 			_tracker = null;
 
 			Safe = safeToTrack;
+			CurrentNetwork = safeToTrack.Network;
+			StallMemPool = true;
 
 			_qBitClient = new QBitNinjaClient(safeToTrack.Network);
 			_httpClient = new HttpClient();
@@ -271,7 +274,7 @@ namespace HBitcoin.FullBlockSpv
 			Tracker.BestHeightChanged += delegate { OnBestHeightChanged(); };
 		}
 
-		public static async Task StartAsync(CancellationToken ctsToken)
+		public async Task StartAsync(CancellationToken ctsToken)
 		{
 			Nodes.Connect();
 
@@ -293,15 +296,15 @@ namespace HBitcoin.FullBlockSpv
 		#region SafeTracking
 
 		// BIP44 specifies default 20, altough we don't use BIP44, let's be somewhat consistent
-		public static int MaxCleanAddressCount { get; set; } = 20;
-	    private static void UpdateSafeTracking()
+		public int MaxCleanAddressCount { get; set; } = 20;
+	    private void UpdateSafeTracking()
 		{
 			UpdateSafeTrackingByHdPathType(HdPathType.Receive);
 			UpdateSafeTrackingByHdPathType(HdPathType.Change);
 			UpdateSafeTrackingByHdPathType(HdPathType.NonHardened);
 		}
 
-		private static void UpdateSafeTrackingByHdPathType(HdPathType hdPathType)
+		private void UpdateSafeTrackingByHdPathType(HdPathType hdPathType)
 		{
 			if (TracksDefaultSafe) UpdateSafeTrackingByPath(hdPathType);
 
@@ -311,7 +314,7 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-		private static void UpdateSafeTrackingByPath(HdPathType hdPathType, SafeAccount account = null)
+		private void UpdateSafeTrackingByPath(HdPathType hdPathType, SafeAccount account = null)
 		{
 			int i = 0;
 			var cleanCount = 0;
@@ -341,7 +344,7 @@ namespace HBitcoin.FullBlockSpv
 		/// </summary>
 		/// <param name="account">if null then default safe, if doesn't contain, then exception</param>
 		/// <returns></returns>
-		public static IEnumerable<SafeHistoryRecord> GetSafeHistory(SafeAccount account = null)
+		public IEnumerable<SafeHistoryRecord> GetSafeHistory(SafeAccount account = null)
 		{
 			AssertAccount(account);
 
@@ -391,7 +394,7 @@ namespace HBitcoin.FullBlockSpv
 			return safeHistory.ToList().OrderBy(x => x.TimeStamp);
 		}
 
-		private static void AssertAccount(SafeAccount account)
+		private void AssertAccount(SafeAccount account)
 		{
 			if (account == null)
 			{
@@ -405,7 +408,7 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-		public static HashSet<SmartTransaction> GetAllChainAndMemPoolTransactionsBySafeAccount(SafeAccount account = null)
+		public HashSet<SmartTransaction> GetAllChainAndMemPoolTransactionsBySafeAccount(SafeAccount account = null)
 		{
 			HashSet<Script> trackedScriptPubkeys = GetTrackedScriptPubKeysBySafeAccount(account);
 			var foundTransactions = new HashSet<SmartTransaction>();
@@ -431,7 +434,7 @@ namespace HBitcoin.FullBlockSpv
 			return foundTransactions;
 		}
 
-		public static HashSet<Script> GetTrackedScriptPubKeysBySafeAccount(SafeAccount account = null)
+		public HashSet<Script> GetTrackedScriptPubKeysBySafeAccount(SafeAccount account = null)
 		{
 			var maxTracked = Tracker.TrackedScriptPubKeys.Count;
 			var allPossiblyTrackedAddresses = new HashSet<BitcoinAddress>();
@@ -458,7 +461,7 @@ namespace HBitcoin.FullBlockSpv
 			return actuallyTrackedScriptPubKeys;
 		}
 
-		private static void MemPoolJob_NewTransaction(object sender, NewTransactionEventArgs e)
+		private void MemPoolJob_NewTransaction(object sender, NewTransactionEventArgs e)
 		{
 			if (
 				Tracker.ProcessTransaction(new SmartTransaction(e.Transaction, Height.MemPool)))
@@ -474,7 +477,7 @@ namespace HBitcoin.FullBlockSpv
 		/// <param name="receivedTransactions">int: block height</param>
 		/// <param name="spentTransactions">int: block height</param>
 		/// <returns></returns>
-		public static bool TryFindAllChainAndMemPoolTransactions(Script scriptPubKey, out HashSet<SmartTransaction> receivedTransactions, out HashSet<SmartTransaction> spentTransactions)
+		public bool TryFindAllChainAndMemPoolTransactions(Script scriptPubKey, out HashSet<SmartTransaction> receivedTransactions, out HashSet<SmartTransaction> spentTransactions)
 	    {
 			var found = false;
 			receivedTransactions = new HashSet<SmartTransaction>();
@@ -558,10 +561,11 @@ namespace HBitcoin.FullBlockSpv
 		#endregion
 
 		#region BlockPulling
-		private static async Task BlockPullerJobAsync(CancellationToken ctsToken)
+		private async Task BlockPullerJobAsync(CancellationToken ctsToken)
 		{
 			const int currTimeoutDownSec = 360;
-			while(true)
+			StallMemPool = true;
+			while (true)
 		    {
 			    try
 			    {
@@ -593,37 +597,43 @@ namespace HBitcoin.FullBlockSpv
 						int headerChainHeight = HeaderChain.Height;
 						Height trackerBestHeight = Tracker.BestHeight;
 						Height unprocessedBlockBestHeight = Tracker.UnprocessedBlockBuffer.BestHeight;
-						if (headerChainHeight <= trackerBestHeight)
-					    {
-						    await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
-						    continue;
-					    }
-					    else if(unprocessedBlockBestHeight.Type == HeightType.Chain && (headerChainHeight <= unprocessedBlockBestHeight))
-					    {
-						    await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
-						    continue;
-					    }
-					    else if(Tracker.UnprocessedBlockBuffer.Full)
-					    {
-						    await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
-						    continue;
-					    }
-					    else
+						if(headerChainHeight <= trackerBestHeight)
 						{
-							int relevant = unprocessedBlockBestHeight.Type == HeightType.Chain 
-								? unprocessedBlockBestHeight.Value : 0;
-
-						    if(trackerBestHeight.Type != HeightType.Chain)
-						    {
+							StallMemPool = false;
+							await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+							continue;
+						}
+						else
+						{
+							StallMemPool = true;
+							if (unprocessedBlockBestHeight.Type == HeightType.Chain && (headerChainHeight <= unprocessedBlockBestHeight))
+							{
 								await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
 								continue;
 							}
+							else if(Tracker.UnprocessedBlockBuffer.Full)
+							{
+								await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+								continue;
+							}
+							else
+							{
+								int relevant = unprocessedBlockBestHeight.Type == HeightType.Chain
+									? unprocessedBlockBestHeight.Value
+									: 0;
 
-							height = new Height(
-								Math.Max(trackerBestHeight.Value, relevant)
-								+ 1);
-					    }
-				    }
+								if(trackerBestHeight.Type != HeightType.Chain)
+								{
+									await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+									continue;
+								}
+
+								height = new Height(
+									Math.Max(trackerBestHeight.Value, relevant)
+									+ 1);
+							}
+						}
+					}
 
 					var chainedBlock = HeaderChain.GetBlock(height);
 				    BlockPuller.SetLocation(new ChainedBlock(chainedBlock.Previous.Header, chainedBlock.Previous.Height));
@@ -665,7 +675,7 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-	    private static void Reorg()
+	    private void Reorg()
 		{
 			HeaderChain.SetTip(HeaderChain.Tip.Previous);
 			Tracker.ReorgOne();
@@ -673,7 +683,7 @@ namespace HBitcoin.FullBlockSpv
 		#endregion
 
 		#region Saving
-		private static async Task PeriodicSaveAsync(TimeSpan delay, CancellationToken ctsToken)
+		private async Task PeriodicSaveAsync(TimeSpan delay, CancellationToken ctsToken)
 		{
 			while (true)
 			{
@@ -696,7 +706,7 @@ namespace HBitcoin.FullBlockSpv
 	    private static Height _savedHeaderHeight = Height.Unknown;
 	    private static Height _savedTrackingHeight = Height.Unknown;
 
-	    private static async Task SaveAllChangedAsync()
+	    private async Task SaveAllChangedAsync()
 	    {
 		    await SemaphoreSave.WaitAsync().ConfigureAwait(false);
 			try
@@ -745,13 +755,13 @@ namespace HBitcoin.FullBlockSpv
 		/// <summary>
 		/// 
 		/// </summary>
-		/// <param name="scriptPubKeyToSpend"></param>
+		/// <param name="scriptPubKeyToSend"></param>
 		/// <param name="amount">If Money.Zero then spend all available amount</param>
 		/// <param name="feeType"></param>
 		/// <param name="account"></param>
 		/// <param name="allowUnconfirmed">Allow to spend unconfirmed transactions, if necessary</param>
 		/// <returns></returns>
-		public static async Task<BuildTransactionResult> BuildTransactionAsync(Script scriptPubKeyToSpend, Money amount, FeeType feeType, SafeAccount account = null, bool allowUnconfirmed = false)
+		public async Task<BuildTransactionResult> BuildTransactionAsync(Script scriptPubKeyToSend, Money amount, FeeType feeType, SafeAccount account = null, bool allowUnconfirmed = false)
 		{
 			try
 			{
@@ -759,18 +769,7 @@ namespace HBitcoin.FullBlockSpv
 
 				// 1. Get the script pubkey of the change.
 				Debug.WriteLine("Select change address...");
-				Script changeScriptPubKey;
-				int i = 0;
-				while (true)
-				{
-					Script scriptPubkey = account == null ? Safe.GetAddress(i, HdPathType.Change).ScriptPubKey : Safe.GetAddress(i, HdPathType.Change, account).ScriptPubKey;
-					if (Tracker.IsClean(scriptPubkey))
-					{
-						changeScriptPubKey = scriptPubkey;
-						break;
-					}
-					i++;
-				}
+				Script changeScriptPubKey = GetUnusedScriptPubKeys(account, HdPathType.Change).FirstOrDefault();
 
 				// 2. Find all coins I can spend from the account
 				// 3. How much money we can spend?
@@ -781,7 +780,11 @@ namespace HBitcoin.FullBlockSpv
 				var unconfirmedAvailableAmount = balance.Unconfirmed;
 				Debug.WriteLine($"Available amount: {availableAmount}");
 
-				BuildTransactionResult result = new BuildTransactionResult();
+				BuildTransactionResult successfulResult = new BuildTransactionResult()
+				{
+					Success = true,
+					FailingReason = ""
+				};
 
 				// 4. Get and calculate fee
 				Debug.WriteLine("Calculating dynamic transaction fee...");
@@ -802,7 +805,7 @@ namespace HBitcoin.FullBlockSpv
 
 				bool spendAll = amount == Money.Zero;
 				int inNum;
-				if(spendAll)
+				if (spendAll)
 				{
 					inNum = unspentCoins.Count;
 				}
@@ -813,7 +816,7 @@ namespace HBitcoin.FullBlockSpv
 					{
 						inNum = SelectCoinsToSpend(unspentCoins, amount + feePerBytes * expectedMinTxSize).Count;
 					}
-					catch(InsufficientBalanceException)
+					catch (InsufficientBalanceException)
 					{
 						return new BuildTransactionResult
 						{
@@ -828,7 +831,7 @@ namespace HBitcoin.FullBlockSpv
 				Debug.WriteLine($"Estimated tx size: {estimatedTxSize} bytes");
 				Money fee = feePerBytes * estimatedTxSize;
 				Debug.WriteLine($"Fee: {fee.ToDecimal(MoneyUnit.BTC):0.#############################}btc");
-				result.Fee = fee;
+				successfulResult.Fee = fee;
 
 				// 5. How much to spend?
 				Money amountToSend = null;
@@ -849,9 +852,9 @@ namespace HBitcoin.FullBlockSpv
 						Success = false,
 						FailingReason = "Not enough funds"
 					};
-				
+
 				decimal feePc = (100 * fee.ToDecimal(MoneyUnit.BTC)) / amountToSend.ToDecimal(MoneyUnit.BTC);
-				result.FeePercentOfSent = feePc;
+				successfulResult.FeePercentOfSent = feePc;
 				if (feePc > 1)
 				{
 					Debug.WriteLine("");
@@ -867,7 +870,7 @@ namespace HBitcoin.FullBlockSpv
 					var unconfirmedToSend = totalOutAmount - confirmedAvailableAmount;
 					Debug.WriteLine("");
 					Debug.WriteLine($"In order to complete this transaction you have to spend {unconfirmedToSend.ToDecimal(MoneyUnit.BTC):0.#############################} unconfirmed btc.");
-					result.SpendsUnconfirmed = true;
+					successfulResult.SpendsUnconfirmed = true;
 				}
 
 				// 7. Select coins
@@ -888,21 +891,20 @@ namespace HBitcoin.FullBlockSpv
 				var tx = builder
 					.AddCoins(coinsToSpend)
 					.AddKeys(signingKeys.ToArray())
-					.Send(scriptPubKeyToSpend, amountToSend)
+					.Send(scriptPubKeyToSend, amountToSend)
 					.SetChange(changeScriptPubKey)
 					.SendFees(fee)
 					.BuildTransaction(true);
 
-				if(!builder.Verify(tx))
+				if (!builder.Verify(tx))
 					return new BuildTransactionResult
 					{
 						Success = false,
 						FailingReason = "Couldn't build the transaction"
 					};
 
-				result.Transaction = tx;
-				result.Success = true;
-				return result;
+				successfulResult.Transaction = tx;
+				return successfulResult;
 			}
 			catch (Exception ex)
 			{
@@ -911,6 +913,25 @@ namespace HBitcoin.FullBlockSpv
 					Success = false,
 					FailingReason = ex.ToString()
 				};
+			}
+		}
+
+		public IEnumerable<Script> GetUnusedScriptPubKeys(SafeAccount account = null, HdPathType hdPathType = HdPathType.Receive)
+		{
+			AssertAccount(account);
+
+			HashSet<Script> scriptPubKeys = new HashSet<Script>();
+			int i = 0;
+			while (true)
+			{
+				Script scriptPubkey = account == null ? Safe.GetAddress(i, hdPathType).ScriptPubKey : Safe.GetAddress(i, hdPathType, account).ScriptPubKey;
+				if (Tracker.IsClean(scriptPubkey))
+				{
+					scriptPubKeys.Add(scriptPubkey);
+					if (scriptPubKeys.Count >= MaxCleanAddressCount)
+						return scriptPubKeys;
+				}
+				i++;
 			}
 		}
 
@@ -972,7 +993,7 @@ namespace HBitcoin.FullBlockSpv
 			return haveEnough;
 		}
 
-		public static AvailableAmount GetBalance(out IDictionary<Coin, bool> unspentCoins, SafeAccount account = null, bool allowUnconfirmed = false)
+		public AvailableAmount GetBalance(out IDictionary<Coin, bool> unspentCoins, SafeAccount account = null, bool allowUnconfirmed = false)
 		{
 			// 1. Find all coins I can spend from the account
 			Debug.WriteLine("Finding all unspent coins...");
@@ -1025,7 +1046,7 @@ namespace HBitcoin.FullBlockSpv
 		/// <summary>
 		/// Find all unspent transaction output of the account
 		/// </summary>
-		public static IDictionary<Coin, bool> GetUnspentCoins(SafeAccount account = null, bool allowUnconfirmed = false)
+		public IDictionary<Coin, bool> GetUnspentCoins(SafeAccount account = null, bool allowUnconfirmed = false)
 		{
 			AssertAccount(account);
 
@@ -1057,7 +1078,7 @@ namespace HBitcoin.FullBlockSpv
 			return unspentCoins;
 		}
 
-		private static bool IsUnspent(Coin coin) => Tracker
+		private bool IsUnspent(Coin coin) => Tracker
 			.TrackedTransactions
 			.Where(x => x.Height.Type == HeightType.Chain || x.Height.Type == HeightType.MemPool)
 			.SelectMany(x => x.Transaction.Inputs)
@@ -1065,6 +1086,12 @@ namespace HBitcoin.FullBlockSpv
 
 		public static async Task<SendTransactionResult> SendTransactionAsync(Transaction tx)
 		{
+			var successfulResult = new SendTransactionResult
+			{
+				Success = true,
+				FailingReason = ""
+			};
+
 			Debug.WriteLine($"Transaction Id: {tx.GetHash()}");
 
 			// QBit's success response is buggy so let's check manually, too
@@ -1099,7 +1126,7 @@ namespace HBitcoin.FullBlockSpv
 						Debug.WriteLine("Try broadcasting transaction with smartbit...");
 
 						var post = "https://testnet-api.smartbit.com.au/v1/blockchain/pushtx";
-						if(Safe.Network == Network.Main)
+						if(CurrentNetwork == Network.Main)
 							post = "https://api.smartbit.com.au/v1/blockchain/pushtx";
 
 						var content = new StringContent(new JObject(new JProperty("hex", tx.ToHex())).ToString(), Encoding.UTF8,
@@ -1109,10 +1136,7 @@ namespace HBitcoin.FullBlockSpv
 						if(json.Value<bool>("success"))
 						{
 							Debug.WriteLine("Transaction is successfully propagated on the network.");
-							return new SendTransactionResult
-							{
-								Success = true
-							};
+							return successfulResult;
 						}
 						else
 						{
@@ -1135,10 +1159,7 @@ namespace HBitcoin.FullBlockSpv
 				};
 			}
 			Debug.WriteLine("Transaction is successfully propagated on the network.");
-			return new SendTransactionResult
-			{
-				Success = true
-			};
+			return successfulResult;
 		}
 
 		public struct SendTransactionResult

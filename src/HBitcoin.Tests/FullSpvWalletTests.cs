@@ -35,7 +35,6 @@ namespace HBitcoin.Tests
 			if(File.Exists(path))
 			{
 				safe = Safe.Load(password, path);
-				safe.Delete();
 			}
 			else
 			{
@@ -46,27 +45,27 @@ namespace HBitcoin.Tests
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
-			WalletJob.Init(safe);
+			WalletJob walletJob = new WalletJob(safe);
 
 			// note some event
 			_fullyConnected = false;
 			_syncedOnce = false;
 			WalletJob.ConnectedNodeCountChanged += WalletJob_ConnectedNodeCountChanged;
-			WalletJob.StateChanged += WalletJob_StateChanged;
+			walletJob.StateChanged += WalletJob_StateChanged;
 
-			Assert.True(WalletJob.SafeAccounts.Count == 0);
+			Assert.True(walletJob.SafeAccounts.Count == 0);
 			Assert.True(WalletJob.ConnectedNodeCount == 0);
-			var allTxCount = WalletJob.Tracker.TrackedTransactions.Count;
+			var allTxCount = walletJob.Tracker.TrackedTransactions.Count;
 			Assert.True(allTxCount == 0);
-			Assert.True(!WalletJob.GetSafeHistory().Any());
-			Assert.True(WalletJob.State == WalletState.NotStarted);
-			Assert.True(WalletJob.TracksDefaultSafe);
+			Assert.True(!walletJob.GetSafeHistory().Any());
+			Assert.True(walletJob.State == WalletState.NotStarted);
+			Assert.True(walletJob.TracksDefaultSafe);
 
 			// start syncing
 			var cts = new CancellationTokenSource();
-			var walletJobTask = WalletJob.StartAsync(cts.Token);
-			Assert.True(WalletJob.State != WalletState.NotStarted);
-			Task reportTask = Helpers.ReportAsync(cts.Token);
+			var walletJobTask = walletJob.StartAsync(cts.Token);
+			Assert.True(walletJob.State != WalletState.NotStarted);
+			Task reportTask = Helpers.ReportAsync(cts.Token, walletJob);
 
 			try
 			{
@@ -81,16 +80,16 @@ namespace HBitcoin.Tests
 					Task.Delay(1000).Wait();
 				}
 
-				Assert.True(WalletJob.State == WalletState.Synced);
-				Assert.True(WalletJob.CreationHeight != Height.Unknown);
-				Assert.True(WalletJob.Tracker.TrackedTransactions.Count == 0);
-				Assert.True(!WalletJob.GetSafeHistory().Any());
+				Assert.True(walletJob.State == WalletState.Synced);
+				Assert.True(walletJob.CreationHeight != Height.Unknown);
+				Assert.True(walletJob.Tracker.TrackedTransactions.Count == 0);
+				Assert.True(!walletJob.GetSafeHistory().Any());
 				Height headerHeight;
 				Assert.True(WalletJob.TryGetHeaderHeight(out headerHeight));
-				var expectedBlockCount = headerHeight.Value - WalletJob.CreationHeight.Value + 1;
-				Assert.True(WalletJob.Tracker.BlockCount == expectedBlockCount);
-				Assert.True(WalletJob.Tracker.TrackedScriptPubKeys.Count > 0);
-				Assert.True(WalletJob.Tracker.TrackedTransactions.Count == 0);
+				var expectedBlockCount = headerHeight.Value - walletJob.CreationHeight.Value + 1;
+				Assert.True(walletJob.Tracker.BlockCount == expectedBlockCount);
+				Assert.True(walletJob.Tracker.TrackedScriptPubKeys.Count > 0);
+				Assert.True(walletJob.Tracker.TrackedTransactions.Count == 0);
 			}
 			finally
 			{
@@ -98,14 +97,15 @@ namespace HBitcoin.Tests
 				Task.WhenAll(reportTask, walletJobTask).Wait();
 
 				WalletJob.ConnectedNodeCountChanged -= WalletJob_ConnectedNodeCountChanged;
-				WalletJob.StateChanged -= WalletJob_StateChanged;
+				walletJob.StateChanged -= WalletJob_StateChanged;
 			}
 		}
 
 		private void WalletJob_StateChanged(object sender, EventArgs e)
 		{
-			Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
-			if (WalletJob.State == WalletState.Synced)
+			var walletJob = sender as WalletJob;
+			Debug.WriteLine($"{nameof(WalletJob.State)}: {walletJob.State}");
+			if (walletJob.State == WalletState.Synced)
 			{
 				_syncedOnce = true;
 			}
@@ -135,31 +135,20 @@ namespace HBitcoin.Tests
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
-			WalletJob.Init(safe);
+			WalletJob walletJob = new WalletJob(safe);
 			// note some event
-			WalletJob.ConnectedNodeCountChanged += delegate
-			{
-				if(WalletJob.MaxConnectedNodeCount == WalletJob.ConnectedNodeCount)
-				{
-					Debug.WriteLine(
-						$"{nameof(WalletJob.MaxConnectedNodeCount)} reached: {WalletJob.MaxConnectedNodeCount}");
-				}
-				else Debug.WriteLine($"{nameof(WalletJob.ConnectedNodeCount)}: {WalletJob.ConnectedNodeCount}");
-			};
-			WalletJob.StateChanged += delegate
-			{
-				Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
-			};
+			WalletJob.ConnectedNodeCountChanged += WalletJob_ConnectedNodeCountChanged;
+			walletJob.StateChanged += WalletJob_StateChanged;
 
 			// start syncing
 			var cts = new CancellationTokenSource();
-			var walletJobTask = WalletJob.StartAsync(cts.Token);
-			Task reportTask = Helpers.ReportAsync(cts.Token);
+			var walletJobTask = walletJob.StartAsync(cts.Token);
+			Task reportTask = Helpers.ReportAsync(cts.Token, walletJob);
 
 			try
 			{
 				// wait until synced enough to have our transaction
-				while (WalletJob.BestHeight.Type != HeightType.Chain || WalletJob.BestHeight < 1092448)
+				while (walletJob.BestHeight.Type != HeightType.Chain || walletJob.BestHeight < 1092448)
 				{
 					Task.Delay(1000).Wait();
 				}
@@ -167,7 +156,7 @@ namespace HBitcoin.Tests
 				var hasMoneyAddress = BitcoinAddress.Create("mmVZjqZjmLvxc3YFhWqYWoe5anrWVcoJcc");
 				Debug.WriteLine($"Checking proper balance on {hasMoneyAddress.ToWif()}");
 
-				var record = WalletJob.GetSafeHistory().FirstOrDefault();
+				var record = walletJob.GetSafeHistory().FirstOrDefault();
 				Assert.True(record != default(SafeHistoryRecord));
 
 				Assert.True(record.Confirmed);
@@ -181,6 +170,9 @@ namespace HBitcoin.Tests
 			{
 				cts.Cancel();
 				Task.WhenAll(reportTask, walletJobTask).Wait();
+
+				WalletJob.ConnectedNodeCountChanged -= WalletJob_ConnectedNodeCountChanged;
+				walletJob.StateChanged -= WalletJob_StateChanged;
 			}
 		}
 
@@ -199,43 +191,29 @@ namespace HBitcoin.Tests
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
-			WalletJob.MaxCleanAddressCount = 79;
-			WalletJob.Init(safe);
-			var syncedOnce = false;
+			WalletJob walletJob = new WalletJob(safe)
+			{
+				MaxCleanAddressCount = 79
+			};
 			// note some event
-			WalletJob.ConnectedNodeCountChanged += delegate
-			{
-				if (WalletJob.MaxConnectedNodeCount == WalletJob.ConnectedNodeCount)
-				{
-					Debug.WriteLine(
-						$"{nameof(WalletJob.MaxConnectedNodeCount)} reached: {WalletJob.MaxConnectedNodeCount}");
-				}
-				else Debug.WriteLine($"{nameof(WalletJob.ConnectedNodeCount)}: {WalletJob.ConnectedNodeCount}");
-			};
-			WalletJob.StateChanged += delegate
-			{
-				Debug.WriteLine($"{nameof(WalletJob.State)}: {WalletJob.State}");
-				
-				if (WalletJob.State == WalletState.Synced)
-				{
-					syncedOnce = true;
-				}
-			};
+			WalletJob.ConnectedNodeCountChanged += WalletJob_ConnectedNodeCountChanged;
+			_syncedOnce = false;
+			walletJob.StateChanged += WalletJob_StateChanged;
 
 			// start syncing
 			var cts = new CancellationTokenSource();
-			var walletJobTask = WalletJob.StartAsync(cts.Token);
-			Task reportTask = Helpers.ReportAsync(cts.Token);
+			var walletJobTask = walletJob.StartAsync(cts.Token);
+			Task reportTask = Helpers.ReportAsync(cts.Token, walletJob);
 
 			try
 			{
 				// wait until fully synced
-				while (!syncedOnce)
+				while (!_syncedOnce)
 				{
 					Task.Delay(1000).Wait();
 				}
 
-				Helpers.ReportFullHistory();
+				Helpers.ReportFullHistory(walletJob);
 
 				// 0. Query all operations, grouped our used safe addresses
 				int MinUnusedKeyNum = 37;
@@ -267,7 +245,7 @@ namespace HBitcoin.Tests
 					.OrderByDescending(x => x.Item3) // Confirmations
 					.ThenBy(x => x.Item1); // FirstSeen
 
-				var fullSpvHistoryRecords = WalletJob.GetSafeHistory();
+				var fullSpvHistoryRecords = walletJob.GetSafeHistory();
 
 				// This won't be equal QBit doesn't show us this transaction: 2017.01.04. 16:24:49	0.00000000	True		77b10ff78aab2e41764a05794c4c464922c73f0c23356190429833ce68fd7be9
 				//Assert.Equal(qBitHistoryRecords.Count(), fullSpvHistoryRecords.Count());
@@ -298,6 +276,9 @@ namespace HBitcoin.Tests
 			{
 				cts.Cancel();
 				Task.WhenAll(reportTask, walletJobTask).Wait();
+
+				WalletJob.ConnectedNodeCountChanged -= WalletJob_ConnectedNodeCountChanged;
+				walletJob.StateChanged -= WalletJob_StateChanged;
 			}
 		}
 	}
