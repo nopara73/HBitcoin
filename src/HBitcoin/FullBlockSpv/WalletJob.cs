@@ -780,7 +780,7 @@ namespace HBitcoin.FullBlockSpv
 				Money spendableUnconfirmedAmount = 
 					allowUnconfirmed ? balance.Unconfirmed : Money.Zero;
 				Debug.WriteLine($"Spendable confirmed amount: {spendableConfirmedAmount}");
-				Debug.WriteLine($"Spendable unconfirmed amount: {spendableConfirmedAmount}");
+				Debug.WriteLine($"Spendable unconfirmed amount: {spendableUnconfirmedAmount}");
 
 				BuildTransactionResult successfulResult = new BuildTransactionResult
 				{
@@ -820,11 +820,7 @@ namespace HBitcoin.FullBlockSpv
 					}
 					catch (InsufficientBalanceException)
 					{
-						return new BuildTransactionResult
-						{
-							Success = false,
-							FailingReason = "Not enough funds"
-						};
+						return NotEnoughFundsBuildTransactionResult;
 					}
 				}
 
@@ -839,7 +835,10 @@ namespace HBitcoin.FullBlockSpv
 				Money amountToSend = null;
 				if (spendAll)
 				{
-					amountToSend = spendableConfirmedAmount;
+					if(allowUnconfirmed)
+						amountToSend = spendableConfirmedAmount + spendableUnconfirmedAmount;
+					else
+						amountToSend = spendableConfirmedAmount;
 					amountToSend -= fee;
 				}
 				else
