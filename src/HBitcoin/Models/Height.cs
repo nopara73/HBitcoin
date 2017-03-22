@@ -34,6 +34,16 @@ namespace HBitcoin.Models
 			_value = height;
 		}
 
+		public Height(string heightOrHeightType)
+		{
+			var trimmed = heightOrHeightType.Trim();
+			if (trimmed == HeightType.MemPool.ToString())
+				this = MemPool;
+			else if (trimmed == HeightType.Unknown.ToString())
+				this = Unknown;
+			else this = new Height(int.Parse(trimmed));
+		}
+
 		public Height(HeightType type)
 		{
 			if(type == HeightType.Chain) throw new NotSupportedException($"For {type} height must be specified");

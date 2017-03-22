@@ -342,8 +342,7 @@ namespace HBitcoin.FullBlockSpv
 					foreach (var line in File.ReadAllLines(tt))
 					{
 						var pieces = line.Split(':');
-						var height = int.Parse(pieces[1]);
-						TrackedTransactions.TryAdd(new SmartTransaction(new Transaction(pieces[0]), new Height(height)));
+						TrackedTransactions.TryAdd(new SmartTransaction(new Transaction(pieces[0]), new Height(pieces[1])));
 					}
 				}
 
