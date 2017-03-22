@@ -1,6 +1,8 @@
 # HBitcoin
 Privacy focused Bitcoin library on top of NBitcoin for .NET Core.
 
+## [Documentation](https://www.codeproject.com/Articles/1096320/HBitcoin-High-level-Csharp-Bitcoin-Wallet-Library) on CodeProject
+
 ## [Nuget](https://www.nuget.org/packages/HBitcoin)
 
 ## Build & Test
