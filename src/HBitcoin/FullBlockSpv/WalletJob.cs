@@ -264,6 +264,18 @@ namespace HBitcoin.FullBlockSpv
 			MemPoolJob.Synced += delegate
 			{
 				State = WalletState.Synced;
+
+				var trackedMemPoolTransactions = Tracker.TrackedTransactions.Where(x => x.Height == Height.MemPool);
+				foreach(var tx in trackedMemPoolTransactions)
+				{
+					if(!MemPoolJob.Transactions.Contains(tx.GetHash()))
+					{
+						Tracker.TrackedTransactions.TryRemove(tx);
+						Debug.WriteLine($"Transaction fall out of MemPool: {tx.GetHash()}");
+					}
+				}
+
+				Debug.WriteLine("MemPool updated");
 			};
 
 			MemPoolJob.NewTransaction += MemPoolJob_NewTransaction;

@@ -285,7 +285,8 @@ namespace HBitcoin.FullBlockSpv
 				{
 					File.WriteAllLines(
 						Path.Combine(trackerFolderPath, TrackedTransactionsFileName),
-						TrackedTransactions.Select(x => $"{x.Transaction.ToHex()}:{x.Height}"));
+						TrackedTransactions
+						.Select(x => $"{x.Transaction.ToHex()}:{x.Height}"));
 				}
 
 				if (MerkleChain.Count > 0)
@@ -342,7 +343,7 @@ namespace HBitcoin.FullBlockSpv
 					foreach (var line in File.ReadAllLines(tt))
 					{
 						var pieces = line.Split(':');
-						TrackedTransactions.TryAdd(new SmartTransaction(new Transaction(pieces[0]), new Height(pieces[1])));
+						ProcessTransaction(new SmartTransaction(new Transaction(pieces[0]), new Height(pieces[1])));
 					}
 				}
 

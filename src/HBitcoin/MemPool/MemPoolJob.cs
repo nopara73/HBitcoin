@@ -24,8 +24,8 @@ namespace HBitcoin.MemPool
 
 		public static event EventHandler<NewTransactionEventArgs> NewTransaction;
 		private static void OnNewTransaction(Transaction transaction) => NewTransaction?.Invoke(null, new NewTransactionEventArgs(transaction));
-		
-		public static bool _Synced = false;
+
+	    public static bool SyncedOnce { get; private set; } = false;
 		public static event EventHandler Synced;
 		private static void OnSynced() => Synced?.Invoke(null, EventArgs.Empty);
 
@@ -46,52 +46,17 @@ namespace HBitcoin.MemPool
 						continue;
 					}
 
-					var txidsWeAlreadyHadAndFound = new HashSet<uint256>();
-
-					foreach(var node in WalletJob.Nodes.ConnectedNodes)
-					{
-						if(ctsToken.IsCancellationRequested) return;
-						if(!node.IsConnected) continue;
-
-
-						var txidsWeNeed = new HashSet<uint256>();
-						foreach(var txid in await Task.Run(() => node.GetMempool(ctsToken)).ConfigureAwait(false))
-						{
-							// if we had it in prevcycle note we found it again
-							if(Transactions.Contains(txid)) txidsWeAlreadyHadAndFound.Add(txid);
-							// if we didn't have it in prevcicle note we need it
-							else txidsWeNeed.Add(txid);
-						}
-
-						var txIdsPieces = Util.Split(txidsWeNeed.ToArray(), 500);
-
-						if(ctsToken.IsCancellationRequested) continue;
-						if(!node.IsConnected) continue;
-
-						foreach(var txIdsPiece in txIdsPieces)
-						{
-							foreach(
-								var tx in
-								await Task.Run(() => node.GetMempoolTransactions(txIdsPiece.ToArray(), ctsToken)).ConfigureAwait(false))
-							{
-								if(!node.IsConnected) continue;
-								if(ctsToken.IsCancellationRequested) continue;
-
-								// note we found it and add to unprocessed
-								if(txidsWeAlreadyHadAndFound.Add(tx.GetHash()))
-									OnNewTransaction(tx);
-							}
-						}
-					}
+					var currentMemPoolTransactions = await UpdateAsync(ctsToken).ConfigureAwait(false);
+					if (ctsToken.IsCancellationRequested) return;
 
 					// Clear the transactions from the previous cycle
-					Transactions = new ConcurrentHashSet<uint256>(txidsWeAlreadyHadAndFound);
+					Transactions = new ConcurrentHashSet<uint256>(currentMemPoolTransactions);
 
-					if(!_Synced)
+					if(!SyncedOnce)
 					{
-						_Synced = true;
-						OnSynced();
+						SyncedOnce = true;
 					}
+					OnSynced();
 
 					await Task.Delay(1000, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
 				}
@@ -106,5 +71,47 @@ namespace HBitcoin.MemPool
 				}
 			}
 		}
-	}
+
+	    private static async Task<IEnumerable<uint256>> UpdateAsync(CancellationToken ctsToken)
+	    {
+		    var txidsWeAlreadyHadAndFound = new HashSet<uint256>();
+
+			// todo NBitcoin bug: iteration of Nodes.ConnectedNodes fails with exception when a node disconnects, it does not update the ConnectedNodes enumeration
+			foreach (var node in WalletJob.Nodes.ConnectedNodes)
+		    {
+			    if(ctsToken.IsCancellationRequested) return txidsWeAlreadyHadAndFound;
+			    if(!node.IsConnected) continue;
+
+			    var txidsWeNeed = new HashSet<uint256>();
+			    foreach(var txid in await Task.Run(() => node.GetMempool(ctsToken)).ConfigureAwait(false))
+			    {
+				    // if we had it in prevcycle note we found it again
+				    if(Transactions.Contains(txid)) txidsWeAlreadyHadAndFound.Add(txid);
+				    // if we didn't have it in prevcicle note we need it
+				    else txidsWeNeed.Add(txid);
+			    }
+
+			    var txIdsPieces = Util.Split(txidsWeNeed.ToArray(), 500);
+
+			    if(ctsToken.IsCancellationRequested) continue;
+			    if(!node.IsConnected) continue;
+
+			    foreach(var txIdsPiece in txIdsPieces)
+			    {
+				    foreach(
+					    var tx in
+					    await Task.Run(() => node.GetMempoolTransactions(txIdsPiece.ToArray(), ctsToken)).ConfigureAwait(false))
+				    {
+					    if(!node.IsConnected) continue;
+					    if(ctsToken.IsCancellationRequested) continue;
+
+					    // note we found it and add to unprocessed
+					    if(txidsWeAlreadyHadAndFound.Add(tx.GetHash()))
+						    OnNewTransaction(tx);
+				    }
+			    }
+		    }
+		    return txidsWeAlreadyHadAndFound;
+	    }
+    }
 }

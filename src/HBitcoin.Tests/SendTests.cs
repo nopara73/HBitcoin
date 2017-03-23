@@ -94,11 +94,18 @@ namespace HBitcoin.Tests
 				Assert.True(foundReceive);
 
 				var txProbArrived = false;
+				var prevCount = walletJob.Tracker.TrackedTransactions.Count;
 				walletJob.Tracker.TrackedTransactions.CollectionChanged += delegate
 				{
-					txProbArrived = true;
+					var actCount = walletJob.Tracker.TrackedTransactions.Count;
+					// if arrived
+					if (actCount > prevCount)
+					{
+						txProbArrived = true;
+					}
+					else prevCount = actCount;
 				};
-				
+
 				var sendRes = WalletJob.SendTransactionAsync(res.Transaction).Result;
 				Assert.True(sendRes.Success);
 				Assert.True(sendRes.FailingReason == "");
@@ -255,9 +262,16 @@ namespace HBitcoin.Tests
 				Assert.True(resMedium.Fee <= resHigh.Fee);
 
 				var txProbArrived = false;
+				var prevCount = walletJob.Tracker.TrackedTransactions.Count;
 				walletJob.Tracker.TrackedTransactions.CollectionChanged += delegate
 				{
-					txProbArrived = true;
+					var actCount = walletJob.Tracker.TrackedTransactions.Count;
+					// if arrived
+					if(actCount > prevCount)
+					{
+						txProbArrived = true;
+					}
+					else prevCount = actCount;
 				};
 
 				var sendRes = WalletJob.SendTransactionAsync(resHigh.Transaction).Result;
@@ -356,9 +370,16 @@ namespace HBitcoin.Tests
 				Assert.True(foundReceive);
 
 				var txProbArrived = false;
+				var prevCount = walletJob.Tracker.TrackedTransactions.Count;
 				walletJob.Tracker.TrackedTransactions.CollectionChanged += delegate
 				{
-					txProbArrived = true;
+					var actCount = walletJob.Tracker.TrackedTransactions.Count;
+					// if arrived
+					if (actCount > prevCount)
+					{
+						txProbArrived = true;
+					}
+					else prevCount = actCount;
 				};
 
 				var sendRes = WalletJob.SendTransactionAsync(res.Transaction).Result;
@@ -374,6 +395,113 @@ namespace HBitcoin.Tests
 				Debug.WriteLine("TrackedTransactions collection changed");
 				Assert.True(walletJob.Tracker.TrackedTransactions.Any(x => x.Transaction.GetHash() == res.Transaction.GetHash()));
 				Debug.WriteLine("Transaction arrived");
+			}
+			finally
+			{
+				cts.Cancel();
+				Task.WhenAll(reportTask, walletJobTask).Wait();
+			}
+		}
+
+		[Fact]
+		public void SendsFailGracefullyTest()
+		{
+			Network network = Network.TestNet;
+			SafeAccount account = new SafeAccount(1);
+			string path = $"CommittedWallets/Sending{network}.json";
+			const string password = "";
+			Safe safe = Safe.Load(password, path);
+			Assert.Equal(safe.Network, network);
+			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
+			
+			// create walletjob
+			WalletJob walletJob = new WalletJob(safe, trackDefaultSafe: false, accountsToTrack: account);
+			var syncedOnce = false;
+			// note some event
+			WalletJob.ConnectedNodeCountChanged += delegate
+			{
+				if (WalletJob.MaxConnectedNodeCount == WalletJob.ConnectedNodeCount)
+				{
+					Debug.WriteLine(
+						$"{nameof(WalletJob.MaxConnectedNodeCount)} reached: {WalletJob.MaxConnectedNodeCount}");
+				}
+				else Debug.WriteLine($"{nameof(WalletJob.ConnectedNodeCount)}: {WalletJob.ConnectedNodeCount}");
+			};
+			walletJob.StateChanged += delegate
+			{
+				Debug.WriteLine($"{nameof(walletJob.State)}: {walletJob.State}");
+				if (walletJob.State == WalletState.Synced)
+				{
+					syncedOnce = true;
+				}
+				else syncedOnce = false;
+			};
+
+			// start syncing
+			var cts = new CancellationTokenSource();
+			var walletJobTask = walletJob.StartAsync(cts.Token);
+			Task reportTask = Helpers.ReportAsync(cts.Token, walletJob);
+
+			try
+			{
+				// wait until fully synced
+				while (!syncedOnce)
+				{
+					Task.Delay(1000).Wait();
+				}
+
+				var history = walletJob.GetSafeHistory(account);
+				foreach(var record in history)
+				{
+					Debug.WriteLine($"{record.TransactionId} {record.Amount} {record.Confirmed}");
+				}
+
+				var receive = walletJob.GetUnusedScriptPubKeys(account, HdPathType.Receive).FirstOrDefault();
+
+				IDictionary<Coin, bool> unspentCoins;
+				var bal = walletJob.GetBalance(out unspentCoins, account);
+
+				// Not enough fee
+				Money amountToSend = (bal.Confirmed + bal.Unconfirmed) - new Money(1m, MoneyUnit.Satoshi);
+				var res = walletJob.BuildTransactionAsync(receive, amountToSend, FeeType.Low, account,
+					allowUnconfirmed: true).Result;
+				Assert.True(res.Success == false);
+				Assert.True(res.FailingReason != "");
+				Debug.WriteLine($"Expected FailingReason: {res.FailingReason}");
+
+				// That's not how you spend all
+				amountToSend = (bal.Confirmed + bal.Unconfirmed);
+				res = walletJob.BuildTransactionAsync(receive, amountToSend, FeeType.Low, account,
+					allowUnconfirmed: true).Result;
+				Assert.True(res.Success == false);
+				Assert.True(res.FailingReason != "");
+				Debug.WriteLine($"Expected FailingReason: {res.FailingReason}");
+
+				// Too much
+				amountToSend = (bal.Confirmed + bal.Unconfirmed) + new Money(1, MoneyUnit.BTC);
+				res = walletJob.BuildTransactionAsync(receive, amountToSend, FeeType.Low, account,
+					allowUnconfirmed: true).Result;
+				Assert.True(res.Success == false);
+				Assert.True(res.FailingReason != "");
+				Debug.WriteLine($"Expected FailingReason: {res.FailingReason}");
+
+				// Minus
+				amountToSend = new Money(-1m, MoneyUnit.BTC);
+				res = walletJob.BuildTransactionAsync(receive, amountToSend, FeeType.Low, account,
+					allowUnconfirmed: true).Result;
+				Assert.True(res.Success == false);
+				Assert.True(res.FailingReason != "");
+				Debug.WriteLine($"Expected FailingReason: {res.FailingReason}");
+
+				// Default account is disabled
+				amountToSend = (bal.Confirmed + bal.Unconfirmed) / 2;
+				Assert.ThrowsAsync<NotSupportedException>(async () => await walletJob.BuildTransactionAsync(receive, amountToSend, FeeType.Low, 
+					allowUnconfirmed: true).ConfigureAwait(false)).ContinueWith(t => {}).Wait();
+
+				// No such account
+				amountToSend = (bal.Confirmed + bal.Unconfirmed) / 2;
+				Assert.ThrowsAsync<NotSupportedException>(async () => await walletJob.BuildTransactionAsync(receive, amountToSend, FeeType.Low, new SafeAccount(23421),
+					allowUnconfirmed: true).ConfigureAwait(false)).ContinueWith(t => { }).Wait();
 			}
 			finally
 			{
