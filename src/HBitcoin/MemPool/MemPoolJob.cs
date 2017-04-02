@@ -22,14 +22,17 @@ namespace HBitcoin.MemPool
     {
 	    public static ConcurrentHashSet<uint256> Transactions = new ConcurrentHashSet<uint256>();
 
-		public static event EventHandler<NewTransactionEventArgs> NewTransaction;
+	    public static event EventHandler<NewTransactionEventArgs> NewTransaction;
 		private static void OnNewTransaction(Transaction transaction) => NewTransaction?.Invoke(null, new NewTransactionEventArgs(transaction));
 
 	    public static bool SyncedOnce { get; private set; } = false;
 		public static event EventHandler Synced;
 		private static void OnSynced() => Synced?.Invoke(null, EventArgs.Empty);
 
-		public static async Task StartAsync(CancellationToken ctsToken)
+		public static bool ForcefullyStopped { get; set; } = false;
+		internal static bool Enabled { get; set; } = true;
+
+	    public static async Task StartAsync(CancellationToken ctsToken)
 		{
 			while (true)
 			{
@@ -40,7 +43,7 @@ namespace HBitcoin.MemPool
 						return;
 					}
 
-					if(WalletJob.Nodes.ConnectedNodes.Count <= 3 || WalletJob.StallMemPool)
+					if(WalletJob.Nodes.ConnectedNodes.Count <= 3 || !Enabled || ForcefullyStopped)
 					{
 						await Task.Delay(100, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
 						continue;

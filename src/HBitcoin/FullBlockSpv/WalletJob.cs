@@ -74,9 +74,7 @@ namespace HBitcoin.FullBlockSpv
 				return Height.Unknown;
 			}
 		}
-
-		public static bool StallMemPool { get; private set; } = true;
-
+		
 		public Height BestHeight => HeaderChain.Height < Tracker.BestHeight ? Height.Unknown : Tracker.BestHeight;
 		public event EventHandler BestHeightChanged;
 		private void OnBestHeightChanged() => BestHeightChanged?.Invoke(this, EventArgs.Empty);
@@ -215,7 +213,7 @@ namespace HBitcoin.FullBlockSpv
 
 			Safe = safeToTrack;
 			CurrentNetwork = safeToTrack.Network;
-			StallMemPool = true;
+			MemPoolJob.Enabled = false;
 
 			_qBitClient = new QBitNinjaClient(safeToTrack.Network);
 			_httpClient = new HttpClient();
@@ -298,7 +296,6 @@ namespace HBitcoin.FullBlockSpv
 				MemPoolJob.StartAsync(ctsToken)
 			};
 
-			State = WalletState.SyncingBlocks;
 			await Task.WhenAll(tasks).ConfigureAwait(false);
 
 			State = WalletState.NotStarted;
@@ -577,7 +574,7 @@ namespace HBitcoin.FullBlockSpv
 		private async Task BlockPullerJobAsync(CancellationToken ctsToken)
 		{
 			const int currTimeoutDownSec = 360;
-			StallMemPool = true;
+			MemPoolJob.Enabled = false;
 			while (true)
 		    {
 			    try
@@ -588,15 +585,10 @@ namespace HBitcoin.FullBlockSpv
 				    }
 
 				    // the headerchain didn't catch up to the creationheight yet
-				    if(CreationHeight == Height.Unknown)
-				    {
-					    await Task.Delay(1000, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
-					    continue;
-				    }
-
-				    if(HeaderChain.Height < CreationHeight)
-				    {
-					    await Task.Delay(1000, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+				    if(CreationHeight == Height.Unknown || HeaderChain.Height < CreationHeight)
+					{
+						State = WalletState.SyncingHeaders;
+						await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
 					    continue;
 				    }
 
@@ -610,31 +602,39 @@ namespace HBitcoin.FullBlockSpv
 						int headerChainHeight = HeaderChain.Height;
 						Height trackerBestHeight = Tracker.BestHeight;
 						Height unprocessedBlockBestHeight = Tracker.UnprocessedBlockBuffer.BestHeight;
+						// if no blocks to download (or process) start syncing mempool
 						if(headerChainHeight <= trackerBestHeight)
 						{
-							StallMemPool = false;
+							State = MemPoolJob.SyncedOnce ? WalletState.Synced : WalletState.SyncingMemPool;
+							MemPoolJob.Enabled = true;
 							await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
 							continue;
 						}
+						// else sync blocks
 						else
 						{
-							StallMemPool = true;
-							if (unprocessedBlockBestHeight.Type == HeightType.Chain && (headerChainHeight <= unprocessedBlockBestHeight))
+							MemPoolJob.Enabled = false;
+							State = WalletState.SyncingBlocks;
+							// if unprocessed buffer hit the headerchain height
+							// or unprocessed buffer is full
+							// wait until they get processed
+							if ((
+									unprocessedBlockBestHeight.Type == HeightType.Chain 
+									&& (headerChainHeight <= unprocessedBlockBestHeight)
+								)
+								|| Tracker.UnprocessedBlockBuffer.Full)
 							{
 								await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
 								continue;
 							}
-							else if(Tracker.UnprocessedBlockBuffer.Full)
-							{
-								await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
-								continue;
-							}
+							// else figure out the next block's height to download
 							else
 							{
 								int relevant = unprocessedBlockBestHeight.Type == HeightType.Chain
 									? unprocessedBlockBestHeight.Value
 									: 0;
 
+								// should not happen at this point, but better to check
 								if(trackerBestHeight.Type != HeightType.Chain)
 								{
 									await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
@@ -654,7 +654,7 @@ namespace HBitcoin.FullBlockSpv
 				    CancellationTokenSource ctsBlockDownload = CancellationTokenSource.CreateLinkedTokenSource(
 					    new CancellationTokenSource(TimeSpan.FromSeconds(currTimeoutDownSec)).Token,
 					    ctsToken);
-				    var blockDownloadTask = Task.Run(() => BlockPuller.NextBlock(ctsBlockDownload.Token));
+					var blockDownloadTask = Task.Run(() => BlockPuller.NextBlock(ctsBlockDownload.Token));
 					block = await blockDownloadTask.ContinueWith(t =>
 					{
 						if (ctsToken.IsCancellationRequested) return null;
@@ -688,7 +688,7 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-	    private void Reorg()
+		private void Reorg()
 		{
 			HeaderChain.SetTip(HeaderChain.Tip.Previous);
 			Tracker.ReorgOne();
