@@ -268,6 +268,7 @@ namespace HBitcoin.FullBlockSpv
 				var trackedMemPoolTransactions = Tracker.TrackedTransactions.Where(x => x.Height == Height.MemPool);
 				foreach(var tx in trackedMemPoolTransactions)
 				{
+					// If we are tracking a tx that is malleated or fall out of mempool (too long to confirm) then stop tracking
 					if(!MemPoolJob.Transactions.Contains(tx.GetHash()))
 					{
 						Tracker.TrackedTransactions.TryRemove(tx);
