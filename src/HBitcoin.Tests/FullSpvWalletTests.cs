@@ -63,8 +63,8 @@ namespace HBitcoin.Tests
 
 			// start syncing
 			var cts = new CancellationTokenSource();
-			var walletJobTask = walletJob.StartAsync(cts.Token);
-			Assert.True(walletJob.State != WalletState.NotStarted);
+            var walletJobTask = walletJob.StartAsync(cts.Token);
+            Assert.True(walletJob.State != WalletState.NotStarted);
 			Task reportTask = Helpers.ReportAsync(cts.Token, walletJob);
 
 			try
@@ -128,7 +128,7 @@ namespace HBitcoin.Tests
 		{
 			// load wallet
 			Network network = Network.TestNet;
-			string path = $"CommittedWallets/HaveFunds{network}.json";
+			string path = Path.Combine(Helpers.CommittedWalletsFolderPath, $"HaveFunds{network}.json");
 			const string password = "";
 			Safe safe = Safe.Load(password, path);
 			Assert.Equal(safe.Network, network);
@@ -182,7 +182,7 @@ namespace HBitcoin.Tests
 		{
 			// load wallet
 			Network network = Network.TestNet;
-			string path = "CommittedWallets/HiddenWallet.json";
+			string path = Path.Combine(Helpers.CommittedWalletsFolderPath, $"HiddenWallet.json");
 			const string password = "";
 			// I change it because I am using a very old wallet to test
 			Safe.EarliestPossibleCreationTime = DateTimeOffset.ParseExact("2016-12-18", "yyyy-MM-dd", CultureInfo.InvariantCulture);

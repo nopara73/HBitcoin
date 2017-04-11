@@ -20,7 +20,7 @@ namespace HBitcoin.Tests
 		{
 			Network network = Network.TestNet;
 			SafeAccount account = new SafeAccount(1);
-			string path = $"CommittedWallets/Sending{network}.json";
+			string path = Path.Combine(Helpers.CommittedWalletsFolderPath, $"Sending{network}.json");
 			const string password = "";
 			Safe safe = Safe.Load(password, path);
 			Assert.Equal(safe.Network, network);
@@ -132,7 +132,7 @@ namespace HBitcoin.Tests
 		{
 			Network network = Network.TestNet;
 			SafeAccount account = new SafeAccount(1);
-			string path = $"CommittedWallets/Sending{network}.json";
+			string path = Path.Combine(Helpers.CommittedWalletsFolderPath, $"Sending{ network}.json");
 			const string password = "";
 			Safe safe = Safe.Load(password, path);
 			Assert.Equal(safe.Network, network);
@@ -300,7 +300,7 @@ namespace HBitcoin.Tests
 		{
 			Network network = Network.TestNet;
 			SafeAccount account = new SafeAccount(1);
-			string path = $"CommittedWallets/Sending{network}.json";
+			string path = Path.Combine(Helpers.CommittedWalletsFolderPath, $"Sending{network}.json");
 			const string password = "";
 			Safe safe = Safe.Load(password, path);
 			Assert.Equal(safe.Network, network);
@@ -408,7 +408,7 @@ namespace HBitcoin.Tests
 		{
 			Network network = Network.TestNet;
 			SafeAccount account = new SafeAccount(1);
-			string path = $"CommittedWallets/Sending{network}.json";
+			string path = Path.Combine(Helpers.CommittedWalletsFolderPath, $"Sending{network}.json");
 			const string password = "";
 			Safe safe = Safe.Load(password, path);
 			Assert.Equal(safe.Network, network);

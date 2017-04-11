@@ -287,6 +287,7 @@ namespace HBitcoin.FullBlockSpv
 
 		public async Task StartAsync(CancellationToken ctsToken)
 		{
+            State = WalletState.SyncingHeaders;
 			Nodes.Connect();
 
 			var tasks = new ConcurrentHashSet<Task>
