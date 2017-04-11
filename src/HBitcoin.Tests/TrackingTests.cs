@@ -23,10 +23,10 @@ namespace HBitcoin.Tests
 			Assert.Equal(smartMerkleBlock.Height, same.Height);
 			Assert.Equal(smartMerkleBlock.MerkleBlock.Header.GetHash(), same.MerkleBlock.Header.GetHash());
 
-			// todo fix default constructor byte serialization in NBitcoin MerkleBlock
-			// todo implement equality comparators for NBitcoin MerkleBlock
+            // todo fix default constructor byte serialization in NBitcoin MerkleBlock - WIP: https://github.com/MetacoSA/NBitcoin/issues/238
+            // todo implement equality comparators for NBitcoin MerkleBlock - WIP: https://github.com/MetacoSA/NBitcoin/pull/237
 
-			var block = Network.Main.GetGenesis();
+            var block = Network.Main.GetGenesis();
 			var tx = new Transaction(
 				"0100000001997ae2a654ddb2432ea2fece72bc71d3dbd371703a0479592efae21bf6b7d5100100000000ffffffff01e00f9700000000001976a9142a495afa8b8147ec2f01713b18693cb0a85743b288ac00000000");
 			block.AddTransaction(tx);

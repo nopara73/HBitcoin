@@ -61,14 +61,14 @@ namespace HBitcoin.Models
 
 			var height = new Height(BitConverter.ToInt32(heightBytes, startIndex: 0));
 
-			// Bypass NBitcoin bug
-			var merkleBlock = new MerkleBlock();
-			if(!merkleBlock.ToBytes().SequenceEqual(merkleBlockBytes)) // if not default MerkleBlock
-			{
-				merkleBlock.FromBytes(merkleBlockBytes);
-			}
+            // Bypass NBitcoin bug, WIP: https://github.com/MetacoSA/NBitcoin/issues/238
+            var merkleBlock = new MerkleBlock();
+            if(!merkleBlock.ToBytes().SequenceEqual(merkleBlockBytes)) // if not default MerkleBlock
+            {
+	            merkleBlock.FromBytes(merkleBlockBytes);
+            }
 
-			return new SmartMerkleBlock(height, merkleBlock);
+            return new SmartMerkleBlock(height, merkleBlock);
 		}
 
 		#endregion
