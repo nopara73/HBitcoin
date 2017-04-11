@@ -369,10 +369,10 @@ namespace HBitcoin.FullBlockSpv
 				SafeHistoryRecord record = new SafeHistoryRecord();
 				record.TransactionId = transaction.GetHash();
 				record.BlockHeight = transaction.Height;
-				// todo: the mempool could note when it seen the transaction the first time
+
 				record.TimeStamp = !transaction.Confirmed
-					? DateTimeOffset.UtcNow
-					: HeaderChain.GetBlock(transaction.Height).Header.BlockTime;
+					? transaction.GetFirstSeenIfMemPoolHeight() ?? DateTimeOffset.UtcNow
+                    : HeaderChain.GetBlock(transaction.Height).Header.BlockTime;
 
 				record.Amount = Money.Zero; //for now
 

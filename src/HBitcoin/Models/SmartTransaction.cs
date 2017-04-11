@@ -17,6 +17,14 @@ namespace HBitcoin.Models
 		public bool Confirmed => Height.Type == HeightType.Chain;
 		public uint256 GetHash() => Transaction.GetHash();
 
+        private DateTimeOffset? _firstSeenIfMemPoolHeight = null;
+        /// <summary>
+        /// if Height is MemPool it's first seen, else null, 
+        /// only exists in memory,
+        /// doesn't affect equality
+        /// </summary>
+        public DateTimeOffset? GetFirstSeenIfMemPoolHeight() => _firstSeenIfMemPoolHeight;
+
 		#endregion
 
 		#region Constructors
@@ -30,6 +38,9 @@ namespace HBitcoin.Models
 		{
 			Height = height;
 			Transaction = transaction;
+
+            if (height == Height.MemPool)
+                _firstSeenIfMemPoolHeight = DateTimeOffset.UtcNow;
 		}
 
 		#endregion
