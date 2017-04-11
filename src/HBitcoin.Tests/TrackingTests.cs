@@ -25,7 +25,6 @@ namespace HBitcoin.Tests
 
 			// todo fix default constructor byte serialization in NBitcoin MerkleBlock
 			// todo implement equality comparators for NBitcoin MerkleBlock
-			// todo implement equality comparators for TrackingBlock
 
 			var block = Network.Main.GetGenesis();
 			var tx = new Transaction(
