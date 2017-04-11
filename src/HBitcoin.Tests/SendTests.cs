@@ -23,7 +23,7 @@ namespace HBitcoin.Tests
 			string path = Path.Combine(Helpers.CommittedWalletsFolderPath, $"Sending{network}.json");
 			const string password = "";
 			Safe safe = Safe.Load(password, path);
-			Assert.Equal(safe.Network, network);
+			Assert.Equal(network, safe.Network);
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
@@ -135,7 +135,7 @@ namespace HBitcoin.Tests
 			string path = Path.Combine(Helpers.CommittedWalletsFolderPath, $"Sending{ network}.json");
 			const string password = "";
 			Safe safe = Safe.Load(password, path);
-			Assert.Equal(safe.Network, network);
+			Assert.Equal(network, safe.Network);
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
@@ -303,7 +303,7 @@ namespace HBitcoin.Tests
 			string path = Path.Combine(Helpers.CommittedWalletsFolderPath, $"Sending{network}.json");
 			const string password = "";
 			Safe safe = Safe.Load(password, path);
-			Assert.Equal(safe.Network, network);
+			Assert.Equal(network, safe.Network);
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
@@ -411,7 +411,7 @@ namespace HBitcoin.Tests
 			string path = Path.Combine(Helpers.CommittedWalletsFolderPath, $"Sending{network}.json");
 			const string password = "";
 			Safe safe = Safe.Load(password, path);
-			Assert.Equal(safe.Network, network);
+			Assert.Equal(network, safe.Network);
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 			
 			// create walletjob

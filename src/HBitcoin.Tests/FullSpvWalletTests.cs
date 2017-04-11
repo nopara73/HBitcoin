@@ -131,7 +131,7 @@ namespace HBitcoin.Tests
 			string path = Path.Combine(Helpers.CommittedWalletsFolderPath, $"HaveFunds{network}.json");
 			const string password = "";
 			Safe safe = Safe.Load(password, path);
-			Assert.Equal(safe.Network, network);
+			Assert.Equal(network, safe.Network);
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
@@ -187,7 +187,7 @@ namespace HBitcoin.Tests
 			// I change it because I am using a very old wallet to test
 			Safe.EarliestPossibleCreationTime = DateTimeOffset.ParseExact("2016-12-18", "yyyy-MM-dd", CultureInfo.InvariantCulture);
 			Safe safe = Safe.Load(password, path);
-			Assert.Equal(safe.Network, network);
+			Assert.Equal(network, safe.Network);
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
