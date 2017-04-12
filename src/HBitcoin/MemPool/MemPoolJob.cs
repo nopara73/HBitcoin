@@ -20,9 +20,10 @@ namespace HBitcoin.MemPool
 	}
 	public static class MemPoolJob
     {
-	    public static ConcurrentHashSet<uint256> Transactions = new ConcurrentHashSet<uint256>();
+	    private static ConcurrentHashSet<uint256> _transactions = new ConcurrentHashSet<uint256>();
+        public static ConcurrentHashSet<uint256> Transactions { get => _transactions; private set => _transactions = value; }
 
-	    public static event EventHandler<NewTransactionEventArgs> NewTransaction;
+        public static event EventHandler<NewTransactionEventArgs> NewTransaction;
 		private static void OnNewTransaction(Transaction transaction) => NewTransaction?.Invoke(null, new NewTransactionEventArgs(transaction));
 
 	    public static bool SyncedOnce { get; private set; } = false;
@@ -32,7 +33,7 @@ namespace HBitcoin.MemPool
 		public static bool ForcefullyStopped { get; set; } = false;
 		internal static bool Enabled { get; set; } = true;
 
-	    public static async Task StartAsync(CancellationToken ctsToken)
+        public static async Task StartAsync(CancellationToken ctsToken)
 		{
 			while (true)
 			{

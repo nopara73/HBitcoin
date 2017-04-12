@@ -153,10 +153,9 @@ namespace HBitcoin.FullBlockSpv
 				{
 					foreach (var behavior in _connectionParameters.TemplateBehaviors)
 					{
-						var addressManagerBehavior = behavior as AddressManagerBehavior;
-						if (addressManagerBehavior != null)
-							return addressManagerBehavior.AddressManager;
-					}
+                        if (behavior is AddressManagerBehavior addressManagerBehavior)
+                            return addressManagerBehavior.AddressManager;
+                    }
 				}
 				SemaphoreSave.Wait();
 				try
@@ -181,10 +180,9 @@ namespace HBitcoin.FullBlockSpv
 				if (_connectionParameters != null)
 					foreach (var behavior in _connectionParameters.TemplateBehaviors)
 					{
-						var chainBehavior = behavior as ChainBehavior;
-						if (chainBehavior != null)
-							return chainBehavior.Chain;
-					}
+                        if (behavior is ChainBehavior chainBehavior)
+                            return chainBehavior.Chain;
+                    }
 				var chain = new ConcurrentChain(CurrentNetwork);
 				SemaphoreSave.Wait();
 				try
@@ -402,7 +400,7 @@ namespace HBitcoin.FullBlockSpv
 				safeHistory.Add(record);
 			}
 
-			return safeHistory.ToList().OrderBy(x => x.TimeStamp);
+			return safeHistory.OrderBy(x => x.TimeStamp);
 		}
 
 		private void AssertAccount(SafeAccount account)
@@ -715,8 +713,8 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-	    private static Height _savedHeaderHeight = Height.Unknown;
-	    private static Height _savedTrackingHeight = Height.Unknown;
+	    private Height _savedHeaderHeight = Height.Unknown;
+	    private Height _savedTrackingHeight = Height.Unknown;
 
 	    private async Task SaveAllChangedAsync()
 	    {

@@ -115,21 +115,7 @@ namespace HBitcoin.FullBlockSpv
 		}
 
 		#endregion
-
-		#region Tracking
-
-		private IEnumerable<SmartTransaction> GetNotYetFoundTrackedTransactions()
-		{
-			var notFound = new HashSet<SmartTransaction>();
-			foreach (var tx in TrackedTransactions.Where(x=> !x.Confirmed))
-			{
-				notFound.Add(tx);
-			}
-			return notFound;
-		}
-
-		#endregion
-
+        
 		public void ReorgOne()
 		{
 			// remove the last block

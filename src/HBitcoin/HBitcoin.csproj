@@ -19,8 +19,9 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <NoWarn>1701;1702;1705;S125;S3776;S1450</NoWarn>
+    <NoWarn>1701;1702;1705;S125;S3776;S1450;S1066;S3241;S3010;S1104;IDE0017</NoWarn>
     <PlatformTarget>AnyCPU</PlatformTarget>
+    <GenerateSerializationAssemblies>On</GenerateSerializationAssemblies>
   </PropertyGroup>
 
   <ItemGroup>

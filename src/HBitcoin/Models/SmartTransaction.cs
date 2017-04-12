@@ -17,7 +17,7 @@ namespace HBitcoin.Models
 		public bool Confirmed => Height.Type == HeightType.Chain;
 		public uint256 GetHash() => Transaction.GetHash();
 
-        private DateTimeOffset? _firstSeenIfMemPoolHeight = null;
+        private readonly DateTimeOffset? _firstSeenIfMemPoolHeight = null;
         /// <summary>
         /// if Height is MemPool it's first seen, else null, 
         /// only exists in memory,
@@ -53,17 +53,17 @@ namespace HBitcoin.Models
 		public override bool Equals(object obj)
 		{
 			bool rc = false;
-			if (obj is SmartTransaction)
-			{
-				var transaction = (SmartTransaction)obj;
-				rc = GetHash().Equals(transaction.GetHash());
-			}
-			else if (obj is Transaction)
-			{
-				var transaction = (Transaction)obj;
-				rc = GetHash().Equals(transaction.GetHash());
-			}
-			return rc;
+
+
+            if (obj is SmartTransaction st)
+            {
+                rc = GetHash().Equals(st.GetHash());
+            }
+            else if (obj is Transaction t)
+            {
+                rc = GetHash().Equals(t.GetHash());
+            }
+            return rc;
 		}
 
 		public override int GetHashCode()

@@ -215,11 +215,5 @@ namespace System.Collections.ObjectModel
 			OnPropertyChanged();
 			CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(action, newItem, oldItem, 0));
 		}
-
-		private void OnCollectionChanged(NotifyCollectionChangedAction action, IList newItems)
-		{
-			OnPropertyChanged();
-			CollectionChanged?.Invoke(this, new NotifyCollectionChangedEventArgs(action, newItems, 0));
-		}
 	}
 }
