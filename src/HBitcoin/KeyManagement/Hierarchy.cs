@@ -39,7 +39,7 @@ namespace HBitcoin.KeyManagement
 		public static string GetPathString(SafeAccount account) => account.PathString;
 	}
 
-	public class SafeAccount
+	public class SafeAccount: IEquatable<SafeAccount>
 	{
 		public readonly uint Id;
 		public readonly string PathString;
@@ -70,11 +70,10 @@ namespace HBitcoin.KeyManagement
 		public override bool Equals(object obj)
 		{
 			bool rc = false;
-			if(obj is SafeAccount)
-			{
-				var transaction = (SafeAccount) obj;
-				rc = PathString.Equals(transaction.PathString, StringComparison.Ordinal);
-			}
+
+            var transaction = obj as SafeAccount;
+            if(obj != null) rc = PathString.Equals(transaction.PathString, StringComparison.Ordinal);
+			
 			return rc;
 		}
 

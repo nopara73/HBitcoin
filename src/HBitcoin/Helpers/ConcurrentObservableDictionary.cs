@@ -54,9 +54,8 @@ namespace System.Collections.ObjectModel
 		{
 			lock(Lock)
 			{
-				TValue value;
-				var ret = ConcurrentDictionary.TryRemove(key, out value);
-				if(ret && !suppressNotifications) OnCollectionChanged();
+                var ret = ConcurrentDictionary.TryRemove(key, out TValue value);
+                if (ret && !suppressNotifications) OnCollectionChanged();
 				return ret;
 			}
 		}
@@ -69,9 +68,8 @@ namespace System.Collections.ObjectModel
 		{
 			get
 			{
-				TValue value;
-				return TryGetValue(key, out value) ? value : default(TValue);
-			}
+                return TryGetValue(key, out TValue value) ? value : default(TValue);
+            }
 			set
 			{
 				Insert(key, value, false);
@@ -98,25 +96,19 @@ namespace System.Collections.ObjectModel
 
 		public bool Contains(KeyValuePair<TKey, TValue> item) => ConcurrentDictionary.Contains(item);
 
-		/// <summary>
-		/// NotImplementedException
-		/// </summary>
-		/// <param name="array"></param>
-		/// <param name="arrayIndex"></param>
-		public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex)
-		{
-			throw new NotImplementedException();
-		}
-		
-		/// <summary>
-		/// NotImplementedException
-		/// </summary>
-		public bool IsReadOnly
-		{
-			get { throw new NotImplementedException(); }
-		}
+        /// <summary>
+        /// NotSupportedException
+        /// </summary>
+        /// <param name="array"></param>
+        /// <param name="arrayIndex"></param>
+        public void CopyTo(KeyValuePair<TKey, TValue>[] array, int arrayIndex) => throw new NotSupportedException();
 
-		public int Count => ConcurrentDictionary.Count;
+        /// <summary>
+        /// NotSupportedException
+        /// </summary>
+        public bool IsReadOnly => throw new NotSupportedException();
+
+        public int Count => ConcurrentDictionary.Count;
 
 		public bool Remove(KeyValuePair<TKey, TValue> item) => Remove(item.Key);
 
@@ -174,24 +166,23 @@ namespace System.Collections.ObjectModel
 			{
 				if (key == null) throw new ArgumentNullException(nameof(key));
 
-				TValue item;
-				if (ConcurrentDictionary.TryGetValue(key, out item))
-				{
-					if (add) throw new ArgumentException("An item with the same key has already been added.");
-					if (Equals(item, value)) return;
-					ConcurrentDictionary[key] = value;
+                if (ConcurrentDictionary.TryGetValue(key, out TValue item))
+                {
+                    if (add) throw new ArgumentException("An item with the same key has already been added.");
+                    if (Equals(item, value)) return;
+                    ConcurrentDictionary[key] = value;
 
-					OnCollectionChanged(NotifyCollectionChangedAction.Replace, new KeyValuePair<TKey, TValue>(key, value), new KeyValuePair<TKey, TValue>(key, item));
-					OnPropertyChanged(key.ToString());
-				}
-				else
-				{
-					ConcurrentDictionary[key] = value;
+                    OnCollectionChanged(NotifyCollectionChangedAction.Replace, new KeyValuePair<TKey, TValue>(key, value), new KeyValuePair<TKey, TValue>(key, item));
+                    OnPropertyChanged(key.ToString());
+                }
+                else
+                {
+                    ConcurrentDictionary[key] = value;
 
-					OnCollectionChanged(NotifyCollectionChangedAction.Add, new KeyValuePair<TKey, TValue>(key, value));
-					OnPropertyChanged(key.ToString());
-				}
-			}
+                    OnCollectionChanged(NotifyCollectionChangedAction.Add, new KeyValuePair<TKey, TValue>(key, value));
+                    OnPropertyChanged(key.ToString());
+                }
+            }
 		}
 
 		private void OnPropertyChanged()

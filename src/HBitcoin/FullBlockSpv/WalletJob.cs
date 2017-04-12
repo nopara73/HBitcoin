@@ -426,21 +426,19 @@ namespace HBitcoin.FullBlockSpv
 
 			foreach (var spk in trackedScriptPubkeys)
 			{
-				HashSet<SmartTransaction> rec;
-				HashSet<SmartTransaction> spent;
 
-				if (TryFindAllChainAndMemPoolTransactions(spk, out rec, out spent))
-				{
-					foreach (var tx in rec)
-					{
-						foundTransactions.Add(tx);
-					}
-					foreach (var tx in spent)
-					{
-						foundTransactions.Add(tx);
-					}
-				}
-			}
+                if (TryFindAllChainAndMemPoolTransactions(spk, out HashSet<SmartTransaction> rec, out HashSet<SmartTransaction> spent))
+                {
+                    foreach (var tx in rec)
+                    {
+                        foundTransactions.Add(tx);
+                    }
+                    foreach (var tx in spent)
+                    {
+                        foundTransactions.Add(tx);
+                    }
+                }
+            }
 
 			return foundTransactions;
 		}
@@ -788,9 +786,8 @@ namespace HBitcoin.FullBlockSpv
 				// 2. Find all coins I can spend from the account
 				// 3. How much money we can spend?
 				Debug.WriteLine("Calculating available amount...");
-				IDictionary<Coin, bool> unspentCoins;
-				AvailableAmount balance = GetBalance(out unspentCoins, account);
-				Money spendableConfirmedAmount = balance.Confirmed;
+                AvailableAmount balance = GetBalance(out IDictionary<Coin, bool> unspentCoins, account);
+                Money spendableConfirmedAmount = balance.Confirmed;
 				Money spendableUnconfirmedAmount = 
 					allowUnconfirmed ? balance.Unconfirmed : Money.Zero;
 				Debug.WriteLine($"Spendable confirmed amount: {spendableConfirmedAmount}");

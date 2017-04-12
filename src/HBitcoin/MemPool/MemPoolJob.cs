@@ -18,7 +18,7 @@ namespace HBitcoin.MemPool
 			Transaction = transaction;
 		}
 	}
-	public class MemPoolJob
+	public static class MemPoolJob
     {
 	    public static ConcurrentHashSet<uint256> Transactions = new ConcurrentHashSet<uint256>();
 
