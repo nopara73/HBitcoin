@@ -58,14 +58,13 @@ namespace HBitcoin.Tests
 			foreach (var op in opSet)
 			{
 				var txId = op.TransactionId;
-				List<BalanceOperation> ol;
-				if (operationsPerTransactions.TryGetValue(txId, out ol))
-				{
-					ol.Add(op);
-					operationsPerTransactions[txId] = ol;
-				}
-				else operationsPerTransactions.Add(txId, new List<BalanceOperation> { op });
-			}
+                if (operationsPerTransactions.TryGetValue(txId, out List<BalanceOperation> ol))
+                {
+                    ol.Add(op);
+                    operationsPerTransactions[txId] = ol;
+                }
+                else operationsPerTransactions.Add(txId, new List<BalanceOperation> { op });
+            }
 
 			return operationsPerTransactions;
 		}
