@@ -79,41 +79,48 @@ namespace HBitcoin.MemPool
 	    {
 		    var txidsWeAlreadyHadAndFound = new HashSet<uint256>();
 
-			// todo NBitcoin bug: iteration of Nodes.ConnectedNodes fails with exception when a node disconnects, it does not update the ConnectedNodes enumeration
 			foreach (var node in WalletJob.Nodes.ConnectedNodes)
 		    {
-			    if(ctsToken.IsCancellationRequested) return txidsWeAlreadyHadAndFound;
-			    if(!node.IsConnected) continue;
+                try
+                {
+                    if (ctsToken.IsCancellationRequested) return txidsWeAlreadyHadAndFound;
+                    if (!node.IsConnected) continue;
 
-			    var txidsWeNeed = new HashSet<uint256>();
-			    foreach(var txid in await Task.Run(() => node.GetMempool(ctsToken)).ConfigureAwait(false))
-			    {
-				    // if we had it in prevcycle note we found it again
-				    if(Transactions.Contains(txid)) txidsWeAlreadyHadAndFound.Add(txid);
-				    // if we didn't have it in prevcicle note we need it
-				    else txidsWeNeed.Add(txid);
-			    }
+                    var txidsWeNeed = new HashSet<uint256>();
+                    foreach (var txid in await Task.Run(() => node.GetMempool(ctsToken)).ConfigureAwait(false))
+                    {
+                        // if we had it in prevcycle note we found it again
+                        if (Transactions.Contains(txid)) txidsWeAlreadyHadAndFound.Add(txid);
+                        // if we didn't have it in prevcicle note we need it
+                        else txidsWeNeed.Add(txid);
+                    }
 
-			    var txIdsPieces = Util.Split(txidsWeNeed.ToArray(), 500);
+                    var txIdsPieces = Util.Split(txidsWeNeed.ToArray(), 500);
 
-			    if(ctsToken.IsCancellationRequested) continue;
-			    if(!node.IsConnected) continue;
+                    if (ctsToken.IsCancellationRequested) continue;
+                    if (!node.IsConnected) continue;
 
-			    foreach(var txIdsPiece in txIdsPieces)
-			    {
-				    foreach(
-					    var tx in
-					    await Task.Run(() => node.GetMempoolTransactions(txIdsPiece.ToArray(), ctsToken)).ConfigureAwait(false))
-				    {
-					    if(!node.IsConnected) continue;
-					    if(ctsToken.IsCancellationRequested) continue;
+                    foreach (var txIdsPiece in txIdsPieces)
+                    {
+                        foreach (
+                            var tx in
+                            await Task.Run(() => node.GetMempoolTransactions(txIdsPiece.ToArray(), ctsToken)).ConfigureAwait(false))
+                        {
+                            if (!node.IsConnected) continue;
+                            if (ctsToken.IsCancellationRequested) continue;
 
-					    // note we found it and add to unprocessed
-					    if(txidsWeAlreadyHadAndFound.Add(tx.GetHash()))
-						    OnNewTransaction(tx);
-				    }
-			    }
-		    }
+                            // note we found it and add to unprocessed
+                            if (txidsWeAlreadyHadAndFound.Add(tx.GetHash()))
+                                OnNewTransaction(tx);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Ignoring node exception, continuing iteration with next node:");
+                    System.Diagnostics.Debug.WriteLine(ex);
+                }
+            }
 		    return txidsWeAlreadyHadAndFound;
 	    }
     }
