@@ -15,16 +15,13 @@ namespace HBitcoin.Tests
 		[Fact]
 		public void TrackingBlockTest()
 		{
-			SmartMerkleBlock smartMerkleBlock = new SmartMerkleBlock(4, Network.Main.GetGenesis());
+            SmartMerkleBlock smartMerkleBlock = new SmartMerkleBlock(4, Network.Main.GetGenesis());
 			var bytes = smartMerkleBlock.ToBytes();
 			var same = SmartMerkleBlock.FromBytes(bytes);
 
 			Assert.Equal(smartMerkleBlock.TransactionCount, same.TransactionCount);
 			Assert.Equal(smartMerkleBlock.Height, same.Height);
 			Assert.Equal(smartMerkleBlock.MerkleBlock.Header.GetHash(), same.MerkleBlock.Header.GetHash());
-
-            // todo fix default constructor byte serialization in NBitcoin MerkleBlock - WIP: https://github.com/MetacoSA/NBitcoin/issues/238
-            // todo implement equality comparators for NBitcoin MerkleBlock - WIP: https://github.com/MetacoSA/NBitcoin/pull/237
 
             var block = Network.Main.GetGenesis();
 			var tx = new Transaction(

@@ -248,7 +248,7 @@ namespace HBitcoin.Tests
 				var fullSpvHistoryRecords = walletJob.GetSafeHistory();
 
 				// This won't be equal QBit doesn't show us this transaction: 2017.01.04. 16:24:49	0.00000000	True		77b10ff78aab2e41764a05794c4c464922c73f0c23356190429833ce68fd7be9
-				//Assert.Equal(qBitHistoryRecords.Count(), fullSpvHistoryRecords.Count());
+				// Assert.Equal(qBitHistoryRecords.Count(), fullSpvHistoryRecords.Count());
 
 				HashSet<SafeHistoryRecord> qBitFoundItToo = new HashSet<SafeHistoryRecord>();
 				// Assert all record found by qbit also found by spv and they are identical

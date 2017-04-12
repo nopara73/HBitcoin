@@ -17,8 +17,8 @@ namespace HBitcoin.Tests
     {
         public const string CommittedWalletsFolderPath = "../../../CommittedWallets";
 
-        public static Height _prevHeight = Height.Unknown;
-	    public static Height _prevHeaderHeight = Height.Unknown;
+        private static Height _prevHeight = Height.Unknown;
+	    private static Height _prevHeaderHeight = Height.Unknown;
 
 	    public static async Task ReportAsync(CancellationToken ctsToken, WalletJob walletJob)
 	    {
