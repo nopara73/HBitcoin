@@ -119,6 +119,7 @@ namespace HBitcoin.MemPool
                 {
                     System.Diagnostics.Debug.WriteLine($"Ignoring node exception, continuing iteration with next node:");
                     System.Diagnostics.Debug.WriteLine(ex);
+                    continue;
                 }
             }
 		    return txidsWeAlreadyHadAndFound;
