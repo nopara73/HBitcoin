@@ -247,13 +247,11 @@ namespace HBitcoin.FullBlockSpv
 
 		private void UnprocessedBlockBuffer_HaveBlocks(object sender, EventArgs e)
 		{
-			Height height;
-			Block block;
-			while (UnprocessedBlockBuffer.TryGetAndRemoveOldest(out height, out block))
-			{
-				ProcessBlock(height, block);
-			}
-		}
+            while (UnprocessedBlockBuffer.TryGetAndRemoveOldest(out Height height, out Block block))
+            {
+                ProcessBlock(height, block);
+            }
+        }
 
 		#region Saving
 
