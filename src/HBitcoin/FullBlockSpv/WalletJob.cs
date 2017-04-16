@@ -275,7 +275,13 @@ namespace HBitcoin.FullBlockSpv
 				Debug.WriteLine("MemPool updated");
 			};
 
-			MemPoolJob.NewTransaction += MemPoolJob_NewTransaction;
+            MemPoolJob.NewTransaction += (s, e) =>
+            {
+                if (Tracker.ProcessTransaction(new SmartTransaction(e.Transaction, Height.MemPool)))
+                {
+                    UpdateSafeTracking();
+                }
+            };
 
 			Nodes.ConnectedNodes.Removed += delegate { OnConnectedNodeCountChanged(); };
 			Nodes.ConnectedNodes.Added += delegate { OnConnectedNodeCountChanged(); };
@@ -466,15 +472,6 @@ namespace HBitcoin.FullBlockSpv
 			}
 
 			return actuallyTrackedScriptPubKeys;
-		}
-
-		private void MemPoolJob_NewTransaction(object sender, NewTransactionEventArgs e)
-		{
-			if (
-				Tracker.ProcessTransaction(new SmartTransaction(e.Transaction, Height.MemPool)))
-			{
-				UpdateSafeTracking();
-			}
 		}
 
 		/// <summary>
