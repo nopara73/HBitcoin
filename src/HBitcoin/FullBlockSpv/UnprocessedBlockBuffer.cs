@@ -17,6 +17,8 @@ namespace HBitcoin.FullBlockSpv
 		public event EventHandler HaveBlocks;
 		private void OnHaveBlocks() => HaveBlocks?.Invoke(this, EventArgs.Empty);
 
+		public void Clear() => _blocks.Clear();
+
 		/// <summary>
 		/// 
 		/// </summary>

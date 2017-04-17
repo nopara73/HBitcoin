@@ -116,6 +116,10 @@ namespace HBitcoin.MemPool
                         }
                     }
                 }
+				catch (OperationCanceledException)
+				{
+					continue;
+				}
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"Ignoring node exception, continuing iteration with next node:");

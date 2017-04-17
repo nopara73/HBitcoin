@@ -106,7 +106,7 @@ namespace HBitcoin.Tests
 					else prevCount = actCount;
 				};
 
-				var sendRes = WalletJob.SendTransactionAsync(res.Transaction).Result;
+				var sendRes = walletJob.SendTransactionAsync(res.Transaction).Result;
 				Assert.True(sendRes.Success);
 				Assert.True(sendRes.FailingReason == "");
 
@@ -274,7 +274,7 @@ namespace HBitcoin.Tests
 					else prevCount = actCount;
 				};
 
-				var sendRes = WalletJob.SendTransactionAsync(resHigh.Transaction).Result;
+				var sendRes = walletJob.SendTransactionAsync(resHigh.Transaction).Result;
 				Assert.True(sendRes.Success);
 				Assert.True(sendRes.FailingReason == "");
 
@@ -382,7 +382,7 @@ namespace HBitcoin.Tests
 					else prevCount = actCount;
 				};
 
-				var sendRes = WalletJob.SendTransactionAsync(res.Transaction).Result;
+				var sendRes = walletJob.SendTransactionAsync(res.Transaction).Result;
 				Assert.True(sendRes.Success);
 				Assert.True(sendRes.FailingReason == "");
 
