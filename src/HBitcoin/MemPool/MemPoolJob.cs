@@ -127,7 +127,7 @@ namespace HBitcoin.MemPool
                     continue;
                 }
 
-				System.Diagnostics.Debug.WriteLine($"Mirrored a node's full MemPool. Local MemPool transaction count: {Transactions.Count}");
+				System.Diagnostics.Debug.WriteLine($"Mirrored a node's full MemPool. Local MemPool transaction count: {txidsWeAlreadyHadAndFound.Count}");
 			}
 		    return txidsWeAlreadyHadAndFound;
 	    }
