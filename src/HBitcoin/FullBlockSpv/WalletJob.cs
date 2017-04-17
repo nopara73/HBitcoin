@@ -642,15 +642,23 @@ namespace HBitcoin.FullBlockSpv
 					var blockFeature = new BlockFeature(height.Value);
 
 					Task<GetBlockResponse> getBlockTask = _noTorQBitClient.GetBlock(blockFeature, headerOnly: false, extended: false);
-					var getBlockRespone = await getBlockTask.ConfigureAwait(false);
-					var block = getBlockRespone.Block;
 
-					if (block == null)
+					var getBlockRespone = await getBlockTask.ConfigureAwait(false);
+					if (getBlockRespone == null)
 					{
 						// probably our local headerchain is in front of qbit server
 						await Task.Delay(1000).ConfigureAwait(false);
 						continue;
 					}
+
+					var block = getBlockRespone.Block;
+					if (block == null)
+					{
+						// should not happen
+						await Task.Delay(1000).ConfigureAwait(false);
+						continue;
+					}
+
 					if (ctsToken.IsCancellationRequested) return;
 					
 					// if the hash of the downloaded block is not the same as the header's
