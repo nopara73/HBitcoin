@@ -674,9 +674,9 @@ namespace HBitcoin.FullBlockSpv
 
 		private void Reorg()
 		{
-			Tracker.UnprocessedBlockBuffer.Clear();
 			HeaderChain.SetTip(HeaderChain.Tip.Previous);
 			Tracker.ReorgOne();
+			SaveAllChangedAsync().Wait();
 		}
 		#endregion
 

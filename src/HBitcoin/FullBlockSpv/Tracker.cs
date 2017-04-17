@@ -118,11 +118,20 @@ namespace HBitcoin.FullBlockSpv
         
 		public void ReorgOne()
 		{
+			UnprocessedBlockBuffer.Clear();
 			// remove the last block
 			if (MerkleChain.Count != 0)
 			{
-				if(MerkleChain.TryRemove(MerkleChain.Max()))
+				var bestBlock = MerkleChain.Max();
+				if (MerkleChain.TryRemove(bestBlock))
 				{
+					List<SmartTransaction> affectedTxs = TrackedTransactions.Where(x => x.Height == bestBlock.Height).Select(x=>x).ToList();
+					foreach (var tx in affectedTxs)
+					{
+						TrackedTransactions.TryRemove(tx);
+						// add it back as a mempool transaction, it'll drop out anyway
+						TrackedTransactions.TryAdd(new SmartTransaction(tx.Transaction, Height.MemPool));
+					}
 					BestHeight = MerkleChain.Max().Height;
 				}
 			}
