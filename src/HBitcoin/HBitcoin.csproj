@@ -16,6 +16,7 @@
     <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
     <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
     <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+    <Version>0.1.7.1</Version>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -25,10 +26,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NBitcoin" Version="3.0.2.14" />
-    <PackageReference Include="ConcurrentHashSet" Version="1.0.0" />
+    <PackageReference Include="NBitcoin" Version="3.0.2.15" />
+    <PackageReference Include="ConcurrentHashSet" Version="1.0.1" />
     <PackageReference Include="QBitNinja.Client" Version="1.0.3.38" />
-    <PackageReference Include="SonarAnalyzer.CSharp" Version="5.9.0.1001" />
   </ItemGroup>
 
 </Project>
