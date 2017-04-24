@@ -4,7 +4,7 @@
     <Description>Privacy focused Bitcoin library on top of NBitcoin for .NET Core.</Description>
     <Copyright>MIT</Copyright>
     <AssemblyTitle>HBitcoin</AssemblyTitle>
-    <VersionPrefix>0.1.6</VersionPrefix>
+    <VersionPrefix>0.1.7</VersionPrefix>
     <Authors>nopara73</Authors>
     <TargetFramework>netstandard1.6</TargetFramework>
     <AssemblyName>HBitcoin</AssemblyName>
