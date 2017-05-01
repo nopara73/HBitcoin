@@ -671,6 +671,8 @@ namespace HBitcoin.FullBlockSpv
 					}
 
 					Tracker.AddOrReplaceBlock(height, block);
+
+					MemPoolJob.RemoveTransactions(block.Transactions.Select(x => x.GetHash()));
 				}
 				catch (Exception ex)
 				{

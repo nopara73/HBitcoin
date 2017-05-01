@@ -90,6 +90,7 @@ namespace HBitcoin.Tests
 				Assert.True(walletJob.Tracker.BlockCount == expectedBlockCount);
 				Assert.True(walletJob.Tracker.TrackedScriptPubKeys.Count > 0);
 				Assert.True(walletJob.Tracker.TrackedTransactions.Count == 0);
+				
 			}
 			finally
 			{
