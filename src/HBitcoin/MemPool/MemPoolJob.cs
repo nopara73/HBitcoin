@@ -41,12 +41,9 @@ namespace HBitcoin.MemPool
 			{
 				try
 				{
-					if(ctsToken.IsCancellationRequested)
-					{
-						return;
-					}
+					if (ctsToken.IsCancellationRequested) return;
 
-					if(WalletJob.Nodes.ConnectedNodes.Count <= 3 || !Enabled || ForcefullyStopped)
+					if(!Enabled || ForcefullyStopped || WalletJob.Nodes.ConnectedNodes.Count <= 3)
 					{
 						_notNeededTransactions.Clear(); // should not grow infinitely
 						await Task.Delay(100, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
