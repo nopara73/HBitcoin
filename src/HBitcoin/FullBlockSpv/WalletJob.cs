@@ -243,6 +243,7 @@ namespace HBitcoin.FullBlockSpv
 			_connectionParameters.TemplateBehaviors.Add(new AddressManagerBehavior(AddressManager));
 			//So we don't have to load the chain each time we start
 			_connectionParameters.TemplateBehaviors.Add(new ChainBehavior(HeaderChain));
+			_connectionParameters.TemplateBehaviors.Add(new MemPoolBehavior());
 
 			UpdateSafeTracking();
 

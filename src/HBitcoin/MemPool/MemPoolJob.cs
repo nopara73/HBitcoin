@@ -85,7 +85,7 @@ namespace HBitcoin.MemPool
 		    {
                 try
                 {
-                    if (ctsToken.IsCancellationRequested) return txidsWeAlreadyHadAndFound;
+					if (ctsToken.IsCancellationRequested) return txidsWeAlreadyHadAndFound;
                     if (!node.IsConnected) continue;
 
                     var txidsWeNeed = new HashSet<uint256>();
@@ -132,8 +132,10 @@ namespace HBitcoin.MemPool
 							{
 								if (!_notNeededTransactions.Contains(tx.GetHash()))
 								{
-									Transactions.Add(tx.GetHash());
-									OnNewTransaction(tx);
+									if (Transactions.Add(tx.GetHash()))
+									{
+										OnNewTransaction(tx);
+									}
 								}
 							}
                         }						
@@ -195,6 +197,22 @@ namespace HBitcoin.MemPool
 			{
 				Transactions.TryRemove(tx);
 			}
+		}
+
+		public static bool TryAddNewTransaction(Transaction tx)
+		{
+			if (ForcefullyStopped) return false;
+
+			uint256 hash = tx.GetHash();
+			if (!_notNeededTransactions.Contains(hash))
+			{
+				if (Transactions.Add(hash))
+				{
+					OnNewTransaction(tx);
+					return true;
+				}
+			}
+			return false;
 		}
 	}
 }
