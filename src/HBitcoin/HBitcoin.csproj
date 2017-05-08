@@ -26,7 +26,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NBitcoin" Version="3.0.2.15" />
+    <PackageReference Include="NBitcoin" Version="3.0.2.18" />
     <PackageReference Include="ConcurrentHashSet" Version="1.0.1" />
     <PackageReference Include="QBitNinja.Client" Version="1.0.3.38" />
   </ItemGroup>
