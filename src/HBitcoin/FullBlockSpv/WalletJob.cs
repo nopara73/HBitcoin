@@ -1103,9 +1103,9 @@ namespace HBitcoin.FullBlockSpv
 			.SelectMany(x => x.Transaction.Inputs)
 			.All(txin => txin.PrevOut != coin.Outpoint);
 
-		public async Task<SendTransactionResult> SendTransactionAsync(Transaction tx)
+		public async Task<SendTransactionResult> SendTransactionAsync(Transaction tx, bool quickSend = false)
 		{
-			if(State < WalletState.SyncingMemPool)
+			if (State < WalletState.SyncingMemPool)
 			{
 				return new SendTransactionResult
 				{
@@ -1123,6 +1123,35 @@ namespace HBitcoin.FullBlockSpv
 					FailingReason = ""
 				};
 				Debug.WriteLine($"Transaction Id: {tx.GetHash()}");
+
+				if (quickSend)
+				{
+					Debug.Write("Broadcasting with SmartBit...");
+					var post = "https://testnet-api.smartbit.com.au/v1/blockchain/pushtx";
+					if (CurrentNetwork == Network.Main)
+						post = "https://api.smartbit.com.au/v1/blockchain/pushtx";
+
+					var content = new StringContent(new JObject(new JProperty("hex", tx.ToHex())).ToString(), Encoding.UTF8,
+						"application/json");
+					var smartBitResponse = await _httpClient.PostAsync(post, content).ConfigureAwait(false);
+
+					var json = JObject.Parse(await smartBitResponse.Content.ReadAsStringAsync().ConfigureAwait(false));
+					if (json.Value<bool>("success"))
+					{
+						Debug.WriteLine("Transaction is successfully propagated on the network.");
+						return successfulResult;
+					}
+					else
+					{
+						Debug.WriteLine(
+							$"Error code: {json["error"].Value<string>("code")} Reason: {json["error"].Value<string>("message")}");
+					}
+					return new SendTransactionResult
+					{
+						Success = false,
+						FailingReason = $"Success: { json.Value<bool>("success") } Error code: {json["error"].Value<string>("code")} Reason: {json["error"].Value<string>("message")}"
+					};
+				};			
 
 				// times out at 21sec, last is smartbit, doesn't check for responses, they are sometimes buggy
 				var counter = 0;
