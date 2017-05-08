@@ -1105,80 +1105,109 @@ namespace HBitcoin.FullBlockSpv
 
 		public async Task<SendTransactionResult> SendTransactionAsync(Transaction tx)
 		{
-			var successfulResult = new SendTransactionResult
+			if(State < WalletState.SyncingMemPool)
 			{
-				Success = true,
-				FailingReason = ""
-			};
-
-			Debug.WriteLine($"Transaction Id: {tx.GetHash()}");
-
-			// QBit's success response is buggy so let's check manually, too
-			BroadcastResponse broadcastResponse;
-			var success = false;
-			var tried = 0;
-			const int maxTry = 7;
-			do
-			{
-				tried++;
-				Debug.WriteLine($"Try broadcasting transaction... ({tried})");
-				broadcastResponse = await _qBitClient.Broadcast(tx).ConfigureAwait(false);
-				var getTxResp = await _qBitClient.GetTransaction(tx.GetHash()).ConfigureAwait(false);
-				if(getTxResp != null)
-				{
-					success = true;
-					break;
-				}
-				else
-				{
-					await Task.Delay(3000).ConfigureAwait(false);
-				}
-			} while(tried < maxTry);
-
-			if(!success)
-			{
-				if(broadcastResponse.Error != null)
-				{
-					// Try broadcasting with smartbit if QBit fails (QBit issue)
-					if(broadcastResponse.Error.ErrorCode == RejectCode.INVALID && broadcastResponse.Error.Reason == "Unknown")
-					{
-						Debug.WriteLine("Try broadcasting transaction with smartbit...");
-
-						var post = "https://testnet-api.smartbit.com.au/v1/blockchain/pushtx";
-						if(CurrentNetwork == Network.Main)
-							post = "https://api.smartbit.com.au/v1/blockchain/pushtx";
-
-						var content = new StringContent(new JObject(new JProperty("hex", tx.ToHex())).ToString(), Encoding.UTF8,
-							"application/json");
-						var resp = await _httpClient.PostAsync(post, content).ConfigureAwait(false);
-						var json = JObject.Parse(await resp.Content.ReadAsStringAsync().ConfigureAwait(false));
-						if(json.Value<bool>("success"))
-						{
-							Debug.WriteLine("Transaction is successfully propagated on the network.");
-							return successfulResult;
-						}
-						else
-						{
-							Debug.WriteLine(
-								$"Error code: {json["error"].Value<string>("code")} Reason: {json["error"].Value<string>("message")}");
-						}
-					}
-					else
-					{
-						Debug.WriteLine($"Error code: {broadcastResponse.Error.ErrorCode} Reason: {broadcastResponse.Error.Reason}");
-					}
-				}
-				Debug.WriteLine(
-					"The transaction might not have been successfully broadcasted. Please check the Transaction ID in a block explorer.");
 				return new SendTransactionResult
 				{
 					Success = false,
 					FailingReason =
-						"The transaction might not have been successfully broadcasted. Please check the Transaction ID in a block explorer."
+						"Only propagate transactions after all blocks are downloaded"
 				};
 			}
-			Debug.WriteLine("Transaction is successfully propagated on the network.");
-			return successfulResult;
+
+			try
+			{
+				var successfulResult = new SendTransactionResult
+				{
+					Success = true,
+					FailingReason = ""
+				};
+				Debug.WriteLine($"Transaction Id: {tx.GetHash()}");
+
+				// times out at 21sec, last is smartbit, doesn't check for responses, they are sometimes buggy
+				var counter = 0;
+				while (true)
+				{
+					HttpResponseMessage smartBitResponse = new HttpResponseMessage();
+					BroadcastResponse qbitResponse = new BroadcastResponse(); 
+					try
+					{
+						Debug.Write("Broadcasting with ");
+						if (counter % 2 == 0)
+						{
+							Debug.WriteLine("QBit...");
+							qbitResponse = await _qBitClient.Broadcast(tx).ConfigureAwait(false);
+						}
+						else
+						{
+							Debug.WriteLine("SmartBit...");
+							var post = "https://testnet-api.smartbit.com.au/v1/blockchain/pushtx";
+							if (CurrentNetwork == Network.Main)
+								post = "https://api.smartbit.com.au/v1/blockchain/pushtx";
+
+							var content = new StringContent(new JObject(new JProperty("hex", tx.ToHex())).ToString(), Encoding.UTF8,
+								"application/json");
+							smartBitResponse = await _httpClient.PostAsync(post, content).ConfigureAwait(false);
+						}
+					}
+					catch
+					{
+						counter++;
+						continue;
+					}
+					await Task.Delay(1000).ConfigureAwait(false);
+					var arrived = MemPoolJob.Transactions.Contains(tx.GetHash());
+					if (arrived)
+					{
+						Debug.WriteLine("Transaction is successfully propagated on the network.");
+						return successfulResult;
+					}
+
+					if (counter >= 21) // keep it odd, smartbit has more reliable error messages
+					{
+						string reason = "";
+						if (counter % 2 == 0) //qbit
+						{
+							reason = $"Success: {qbitResponse.Success}";
+							if (qbitResponse.Error != null)
+							{
+								reason += $", ErrorCode: {qbitResponse.Error.ErrorCode}, Reason: {qbitResponse.Error.Reason}";
+							}
+						}
+						else //smartbit
+						{
+							var json = JObject.Parse(await smartBitResponse.Content.ReadAsStringAsync().ConfigureAwait(false));
+							if (json.Value<bool>("success"))
+							{
+								Debug.WriteLine("Transaction is successfully propagated on the network.");
+								return successfulResult;
+							}
+							else
+							{
+								Debug.WriteLine(
+									$"Error code: {json["error"].Value<string>("code")} Reason: {json["error"].Value<string>("message")}");
+							}
+							reason = $"Success: { json.Value<bool>("success") } Error code: {json["error"].Value<string>("code")} Reason: {json["error"].Value<string>("message")}";
+						}
+						return new SendTransactionResult
+						{
+							Success = false,
+							FailingReason =
+							$"The transaction might not have been successfully broadcasted. Check the Transaction ID in a block explorer. Details: {reason}"
+						};
+					}
+					counter++;
+				}
+			}
+			catch(Exception ex)
+			{
+				return new SendTransactionResult
+				{
+					Success = false,
+					FailingReason =
+						"The transaction might not have been successfully broadcasted. Check the Transaction ID in a block explorer. Details:" + ex.ToString()
+				};
+			}
 		}
 
 		public struct SendTransactionResult

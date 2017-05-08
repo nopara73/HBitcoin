@@ -28,7 +28,6 @@ namespace HBitcoin.Tests
 
 			// create walletjob
 			WalletJob walletJob = new WalletJob(safe, trackDefaultSafe: false, accountsToTrack: account);
-			var syncedOnce = false;
 			// note some event
 			WalletJob.ConnectedNodeCountChanged += delegate
 			{
@@ -42,11 +41,6 @@ namespace HBitcoin.Tests
 			walletJob.StateChanged += delegate
 			{
 				Debug.WriteLine($"{nameof(walletJob.State)}: {walletJob.State}");
-				if(walletJob.State == WalletState.Synced)
-				{
-					syncedOnce = true;
-				}
-				else syncedOnce = false;
 			};
 
 			// start syncing
@@ -56,8 +50,8 @@ namespace HBitcoin.Tests
 
 			try
 			{
-				// wait until fully synced
-				while (!syncedOnce)
+				// wait until blocks are synced
+				while (walletJob.State <= WalletState.SyncingMemPool)
 				{
 					Task.Delay(1000).Wait();
 				}
@@ -140,7 +134,6 @@ namespace HBitcoin.Tests
 
 			// create walletjob
 			WalletJob walletJob = new WalletJob(safe, trackDefaultSafe: false, accountsToTrack: account);
-			var syncedOnce = false;
 			// note some event
 			WalletJob.ConnectedNodeCountChanged += delegate
 			{
@@ -154,11 +147,6 @@ namespace HBitcoin.Tests
 			walletJob.StateChanged += delegate
 			{
 				Debug.WriteLine($"{nameof(walletJob.State)}: {walletJob.State}");
-				if (walletJob.State == WalletState.Synced)
-				{
-					syncedOnce = true;
-				}
-				else syncedOnce = false;
 			};
 
 			// start syncing
@@ -168,12 +156,12 @@ namespace HBitcoin.Tests
 
 			try
 			{
-				// wait until fully synced
-				while (!syncedOnce)
+				// wait until blocks are synced
+				while (walletJob.State <= WalletState.SyncingMemPool)
 				{
 					Task.Delay(1000).Wait();
 				}
-				
+
 				var receive = walletJob.GetUnusedScriptPubKeys(account, HdPathType.Receive).FirstOrDefault();
 
 				IDictionary<Coin, bool> unspentCoins;
@@ -308,7 +296,6 @@ namespace HBitcoin.Tests
 
 			// create walletjob
 			WalletJob walletJob = new WalletJob(safe, trackDefaultSafe: false, accountsToTrack: account);
-			var syncedOnce = false;
 			// note some event
 			WalletJob.ConnectedNodeCountChanged += delegate
 			{
@@ -322,11 +309,6 @@ namespace HBitcoin.Tests
 			walletJob.StateChanged += delegate
 			{
 				Debug.WriteLine($"{nameof(walletJob.State)}: {walletJob.State}");
-				if (walletJob.State == WalletState.Synced)
-				{
-					syncedOnce = true;
-				}
-				else syncedOnce = false;
 			};
 
 			// start syncing
@@ -336,8 +318,8 @@ namespace HBitcoin.Tests
 
 			try
 			{
-				// wait until fully synced
-				while (!syncedOnce)
+				// wait until blocks are synced
+				while (walletJob.State <= WalletState.SyncingMemPool)
 				{
 					Task.Delay(1000).Wait();
 				}
@@ -416,7 +398,6 @@ namespace HBitcoin.Tests
 			
 			// create walletjob
 			WalletJob walletJob = new WalletJob(safe, trackDefaultSafe: false, accountsToTrack: account);
-			var syncedOnce = false;
 			// note some event
 			WalletJob.ConnectedNodeCountChanged += delegate
 			{
@@ -430,11 +411,6 @@ namespace HBitcoin.Tests
 			walletJob.StateChanged += delegate
 			{
 				Debug.WriteLine($"{nameof(walletJob.State)}: {walletJob.State}");
-				if (walletJob.State == WalletState.Synced)
-				{
-					syncedOnce = true;
-				}
-				else syncedOnce = false;
 			};
 
 			// start syncing
@@ -444,8 +420,8 @@ namespace HBitcoin.Tests
 
 			try
 			{
-				// wait until fully synced
-				while (!syncedOnce)
+				// wait until blocks are synced
+				while (walletJob.State <= WalletState.SyncingMemPool)
 				{
 					Task.Delay(1000).Wait();
 				}

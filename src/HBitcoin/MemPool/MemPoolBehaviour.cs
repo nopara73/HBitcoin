@@ -24,6 +24,9 @@ namespace HBitcoin.MemPool
 
 		private void AttachedNode_MessageReceived(Node node, IncomingMessage message)
 		{
+			if (MemPoolJob.ForcefullyStopped) return;
+			if (!MemPoolJob.Enabled) return;
+
 			try
 			{
 				if (message.Message.Payload is TxPayload txPayload)

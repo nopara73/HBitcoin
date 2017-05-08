@@ -62,8 +62,8 @@ namespace HBitcoin.MemPool
 						SyncedOnce = true;
 					}
 					OnSynced();
-
-					await Task.Delay(1000, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
+					
+					await Task.Delay(TimeSpan.FromMinutes(3), ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
 				}
 				catch(OperationCanceledException)
 				{
@@ -202,6 +202,7 @@ namespace HBitcoin.MemPool
 		public static bool TryAddNewTransaction(Transaction tx)
 		{
 			if (ForcefullyStopped) return false;
+			if (!Enabled) return false;
 
 			uint256 hash = tx.GetHash();
 			if (!_notNeededTransactions.Contains(hash))
