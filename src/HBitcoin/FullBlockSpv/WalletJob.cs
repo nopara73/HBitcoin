@@ -771,6 +771,7 @@ namespace HBitcoin.FullBlockSpv
 		{
 			try
 			{
+				var queryFeeTask = QueryFeePerBytesAsync(feeType);
 				AssertAccount(account);
 
 				// 1. Get the script pubkey of the change.
@@ -798,7 +799,7 @@ namespace HBitcoin.FullBlockSpv
 				Money feePerBytes = null;
 				try
 				{
-					feePerBytes = await QueryFeePerBytesAsync(feeType).ConfigureAwait(false);
+					feePerBytes = await queryFeeTask.ConfigureAwait(false);
 				}
 				catch (Exception ex)
 				{
