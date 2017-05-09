@@ -45,7 +45,7 @@ namespace HBitcoin.Tests
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
-			WalletJob walletJob = new WalletJob(safe);
+			WalletJob walletJob = new WalletJob(Helpers.SocksPortHandler, Helpers.ControlPortClient, safe);
 
 			// note some event
 			_fullyConnected = false;
@@ -136,7 +136,7 @@ namespace HBitcoin.Tests
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
-			WalletJob walletJob = new WalletJob(safe);
+			WalletJob walletJob = new WalletJob(Helpers.SocksPortHandler, Helpers.ControlPortClient, safe);
 			// note some event
 			WalletJob.ConnectedNodeCountChanged += WalletJob_ConnectedNodeCountChanged;
 			walletJob.StateChanged += WalletJob_StateChanged;
@@ -192,7 +192,7 @@ namespace HBitcoin.Tests
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
-			WalletJob walletJob = new WalletJob(safe)
+			WalletJob walletJob = new WalletJob(Helpers.SocksPortHandler, Helpers.ControlPortClient, safe)
 			{
 				MaxCleanAddressCount = 79
 			};

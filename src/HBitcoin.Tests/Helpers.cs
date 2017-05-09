@@ -10,12 +10,16 @@ using HBitcoin.Models;
 using NBitcoin;
 using QBitNinja.Client;
 using QBitNinja.Client.Models;
+using DotNetTor.SocksPort;
 
 namespace HBitcoin.Tests
 {
     public static class Helpers
     {
-        public const string CommittedWalletsFolderPath = "../../../CommittedWallets";
+		public static SocksPortHandler SocksPortHandler = new SocksPortHandler("127.0.0.1", socksPort: 9050, ignoreSslCertification: true);
+		public static DotNetTor.ControlPort.Client ControlPortClient = new DotNetTor.ControlPort.Client("127.0.0.1", controlPort: 9051, password: "ILoveBitcoin21");
+
+		public const string CommittedWalletsFolderPath = "../../../CommittedWallets";
 
         private static Height _prevHeight = Height.Unknown;
 	    private static Height _prevHeaderHeight = Height.Unknown;

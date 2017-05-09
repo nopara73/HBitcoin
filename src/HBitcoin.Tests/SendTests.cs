@@ -27,7 +27,7 @@ namespace HBitcoin.Tests
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
-			WalletJob walletJob = new WalletJob(safe, trackDefaultSafe: false, accountsToTrack: account);
+			WalletJob walletJob = new WalletJob(Helpers.SocksPortHandler, Helpers.ControlPortClient, safe, trackDefaultSafe: false, accountsToTrack: account);
 			// note some event
 			WalletJob.ConnectedNodeCountChanged += delegate
 			{
@@ -133,7 +133,7 @@ namespace HBitcoin.Tests
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
-			WalletJob walletJob = new WalletJob(safe, trackDefaultSafe: false, accountsToTrack: account);
+			WalletJob walletJob = new WalletJob(Helpers.SocksPortHandler, Helpers.ControlPortClient, safe, trackDefaultSafe: false, accountsToTrack: account);
 			// note some event
 			WalletJob.ConnectedNodeCountChanged += delegate
 			{
@@ -295,7 +295,7 @@ namespace HBitcoin.Tests
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
-			WalletJob walletJob = new WalletJob(safe, trackDefaultSafe: false, accountsToTrack: account);
+			WalletJob walletJob = new WalletJob(Helpers.SocksPortHandler, Helpers.ControlPortClient, safe, trackDefaultSafe: false, accountsToTrack: account);
 			// note some event
 			WalletJob.ConnectedNodeCountChanged += delegate
 			{
@@ -397,7 +397,7 @@ namespace HBitcoin.Tests
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 			
 			// create walletjob
-			WalletJob walletJob = new WalletJob(safe, trackDefaultSafe: false, accountsToTrack: account);
+			WalletJob walletJob = new WalletJob(Helpers.SocksPortHandler, Helpers.ControlPortClient, safe, trackDefaultSafe: false, accountsToTrack: account);
 			// note some event
 			WalletJob.ConnectedNodeCountChanged += delegate
 			{

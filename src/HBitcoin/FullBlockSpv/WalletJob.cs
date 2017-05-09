@@ -18,6 +18,7 @@ using NBitcoin.Protocol.Behaviors;
 using Newtonsoft.Json.Linq;
 using QBitNinja.Client;
 using QBitNinja.Client.Models;
+using DotNetTor.SocksPort;
 
 namespace HBitcoin.FullBlockSpv
 {
@@ -31,9 +32,10 @@ namespace HBitcoin.FullBlockSpv
 		public bool TracksDefaultSafe { get; private set; }
 		public ConcurrentHashSet<SafeAccount> SafeAccounts { get; private set; }
 
-		private readonly QBitNinjaClient _qBitClient;
+		private readonly QBitNinjaClient _torQBitClient;
         private readonly QBitNinjaClient _noTorQBitClient;
-        private static HttpClient _httpClient;
+        private static HttpClient _torHttpClient;
+		private static DotNetTor.ControlPort.Client _controlPortClient;
 
 		private Height _creationHeight;
 		public Height CreationHeight
@@ -203,7 +205,7 @@ namespace HBitcoin.FullBlockSpv
 
 		#endregion
 
-		public WalletJob(Safe safeToTrack, HttpClientHandler handler = null, bool trackDefaultSafe = true, params SafeAccount[] accountsToTrack)
+		public WalletJob(SocksPortHandler handler, DotNetTor.ControlPort.Client controlPortClient, Safe safeToTrack, bool trackDefaultSafe = true, params SafeAccount[] accountsToTrack)
 		{
 			_creationHeight = Height.Unknown;
 			_tracker = null;
@@ -213,13 +215,10 @@ namespace HBitcoin.FullBlockSpv
 			MemPoolJob.Enabled = false;
 
             _noTorQBitClient = new QBitNinjaClient(safeToTrack.Network);
-			_qBitClient = new QBitNinjaClient(safeToTrack.Network);
-			_httpClient = new HttpClient();
-			if (handler != null)
-			{
-				_qBitClient.SetHttpMessageHandler(handler);
-				_httpClient = new HttpClient(handler);
-			}
+			_torQBitClient = new QBitNinjaClient(safeToTrack.Network);
+			_torQBitClient.SetHttpMessageHandler(handler);
+			_torHttpClient = new HttpClient(handler);
+			_controlPortClient = controlPortClient;
 
 			if (accountsToTrack == null || !accountsToTrack.Any())
 			{
@@ -772,6 +771,7 @@ namespace HBitcoin.FullBlockSpv
 		{
 			try
 			{
+				await _controlPortClient.ChangeCircuitAsync().ConfigureAwait(false);
 				var queryFeeTask = QueryFeePerBytesAsync(feeType);
 				AssertAccount(account);
 
@@ -965,7 +965,7 @@ namespace HBitcoin.FullBlockSpv
 		private static async Task<Money> QueryFeePerBytesAsync(FeeType feeType)
 		{
 			HttpResponseMessage response =
-				await _httpClient.GetAsync(@"http://api.blockcypher.com/v1/btc/main", HttpCompletionOption.ResponseContentRead)
+				await _torHttpClient.GetAsync(@"http://api.blockcypher.com/v1/btc/main", HttpCompletionOption.ResponseContentRead)
 					.ConfigureAwait(false);
 
 			var json = JObject.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
@@ -1103,7 +1103,7 @@ namespace HBitcoin.FullBlockSpv
 			.SelectMany(x => x.Transaction.Inputs)
 			.All(txin => txin.PrevOut != coin.Outpoint);
 
-		public async Task<SendTransactionResult> SendTransactionAsync(Transaction tx, bool quickSend = false)
+		public async Task<SendTransactionResult> SendTransactionAsync(Transaction tx)
 		{
 			if (State < WalletState.SyncingMemPool)
 			{
@@ -1117,41 +1117,13 @@ namespace HBitcoin.FullBlockSpv
 
 			try
 			{
+				await _controlPortClient.ChangeCircuitAsync().ConfigureAwait(false);
 				var successfulResult = new SendTransactionResult
 				{
 					Success = true,
 					FailingReason = ""
 				};
 				Debug.WriteLine($"Transaction Id: {tx.GetHash()}");
-
-				if (quickSend)
-				{
-					Debug.Write("Broadcasting with SmartBit...");
-					var post = "https://testnet-api.smartbit.com.au/v1/blockchain/pushtx";
-					if (CurrentNetwork == Network.Main)
-						post = "https://api.smartbit.com.au/v1/blockchain/pushtx";
-
-					var content = new StringContent(new JObject(new JProperty("hex", tx.ToHex())).ToString(), Encoding.UTF8,
-						"application/json");
-					var smartBitResponse = await _httpClient.PostAsync(post, content).ConfigureAwait(false);
-
-					var json = JObject.Parse(await smartBitResponse.Content.ReadAsStringAsync().ConfigureAwait(false));
-					if (json.Value<bool>("success"))
-					{
-						Debug.WriteLine("Transaction is successfully propagated on the network.");
-						return successfulResult;
-					}
-					else
-					{
-						Debug.WriteLine(
-							$"Error code: {json["error"].Value<string>("code")} Reason: {json["error"].Value<string>("message")}");
-					}
-					return new SendTransactionResult
-					{
-						Success = false,
-						FailingReason = $"Success: { json.Value<bool>("success") } Error code: {json["error"].Value<string>("code")} Reason: {json["error"].Value<string>("message")}"
-					};
-				};			
 
 				// times out at 21sec, last is smartbit, doesn't check for responses, they are sometimes buggy
 				var counter = 0;
@@ -1165,7 +1137,7 @@ namespace HBitcoin.FullBlockSpv
 						if (counter % 2 == 0)
 						{
 							Debug.WriteLine("QBit...");
-							qbitResponse = await _qBitClient.Broadcast(tx).ConfigureAwait(false);
+							qbitResponse = await _torQBitClient.Broadcast(tx).ConfigureAwait(false);
 						}
 						else
 						{
@@ -1176,7 +1148,7 @@ namespace HBitcoin.FullBlockSpv
 
 							var content = new StringContent(new JObject(new JProperty("hex", tx.ToHex())).ToString(), Encoding.UTF8,
 								"application/json");
-							smartBitResponse = await _httpClient.PostAsync(post, content).ConfigureAwait(false);
+							smartBitResponse = await _torHttpClient.PostAsync(post, content).ConfigureAwait(false);
 						}
 					}
 					catch
