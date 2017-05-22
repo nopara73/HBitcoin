@@ -91,7 +91,9 @@ namespace HBitcoin.MemPool
                     var txidsWeNeed = new HashSet<uint256>();
 					var sw = new Stopwatch();
 					sw.Start();
-					var txidsOfNode = await Task.Run(() => node.GetMempool(ctsToken)).ConfigureAwait(false);
+					var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(21));
+					var ctsTokenGetMempool = CancellationTokenSource.CreateLinkedTokenSource(ctsToken, timeout.Token);
+					var txidsOfNode = await Task.Run(() => node.GetMempool(ctsTokenGetMempool.Token)).ConfigureAwait(false);
 					sw.Stop();
 					Debug.WriteLine($"GetMempool(), txs: {txidsOfNode.Count()}, secs: {sw.Elapsed.TotalSeconds}");
 					foreach (var txid in txidsOfNode)
