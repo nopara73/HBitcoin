@@ -138,6 +138,7 @@ namespace HBitcoin.FullBlockSpv
 			try
 			{
 				await _tracker.LoadAsync(_trackerFolderPath).ConfigureAwait(false);
+				EnsureNoMissingRelevantBlocks();
 			}
 			catch
 			{
@@ -586,13 +587,24 @@ namespace HBitcoin.FullBlockSpv
 					}
 
 					Height height;
+					Height trackerBestHeight = Tracker.BestHeight;
+					var downloadMissing = false;
 					if (Tracker.BlockCount == 0)
 					{
 						height = CreationHeight;
 					}
-					else
+					else if(trackerBestHeight.Type != HeightType.Chain)
 					{
-						Height trackerBestHeight = Tracker.BestHeight;
+						await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+						continue;
+					}
+					else if(_missingBlocks.Count() != 0)
+					{
+						downloadMissing = true;
+						height = new Height(_missingBlocks.Min());
+					}
+					else
+					{						
 						Height unprocessedBlockBestHeight = Tracker.UnprocessedBlockBuffer.BestHeight;
 						// if no blocks to download (or process) start syncing mempool
 						if (HeaderChain.Height <= trackerBestHeight)
@@ -641,8 +653,17 @@ namespace HBitcoin.FullBlockSpv
 					}
 
 					var firstHeight = height;
-
-					var block = await BlockDownloader.TakeBlockAsync(firstHeight, new Height(HeaderChain.Height), ctsToken).ConfigureAwait(false);
+					Height lookAheadHeight;
+					if (downloadMissing)
+					{
+						lookAheadHeight = height;
+					}
+					else
+					{
+						lookAheadHeight = new Height(HeaderChain.Height);
+					}
+					
+					var block = await BlockDownloader.TakeBlockAsync(firstHeight, lookAheadHeight, ctsToken).ConfigureAwait(false);
 
 					if (ctsToken.IsCancellationRequested) return;
 
@@ -665,14 +686,45 @@ namespace HBitcoin.FullBlockSpv
 					}
 
 					Tracker.AddOrReplaceBlock(height, block);
-
 					MemPoolJob.RemoveTransactions(block.Transactions.Select(x => x.GetHash()));
+
+					if (downloadMissing)
+					{
+						_missingBlocks.TryRemove(height.Value);
+						Debug.WriteLine($"Downloaded missing block: {height.Value}");
+					}					
 				}
 				catch (Exception ex)
 				{
 					Debug.WriteLine($"Ignoring {nameof(BlockDownloadingJobAsync)} exception:");
 					Debug.WriteLine(ex);
 				}
+			}
+		}
+
+		// keep it int for better performance
+		private ConcurrentHashSet<int> _missingBlocks = new ConcurrentHashSet<int>();
+		private void EnsureNoMissingRelevantBlocks()
+		{
+			// must be this complicated for performance
+			var neededHeights = new HashSet<int>();
+			foreach(var h in Tracker.TrackedTransactions
+				.Where(x=>x.Height.Type == HeightType.Chain)
+				.Select(x => x.Height))
+			{
+				neededHeights.Add(h.Value);
+			}
+
+			foreach(var h in Tracker.MerkleChain.Select(x => x.Height.Value))
+			{
+				if (neededHeights.Contains(h))
+				{
+					neededHeights.Remove(h);
+				}
+			}
+			foreach(var h in neededHeights)
+			{
+				_missingBlocks.Add(h);
 			}
 		}
 
@@ -707,7 +759,7 @@ namespace HBitcoin.FullBlockSpv
 		}
 
 	    private Height _savedHeaderHeight = Height.Unknown;
-	    private Height _savedTrackingHeight = Height.Unknown;
+	    private int _savedTrackerBlockCount = -1;
 
 	    private async Task SaveAllChangedAsync()
 	    {
@@ -733,14 +785,15 @@ namespace HBitcoin.FullBlockSpv
 			    SemaphoreSave.Release();
 		    }
 
-		    var trackingHeight = BestHeight;
-		    if(trackingHeight.Type == HeightType.Chain
-				&& (_savedTrackingHeight == Height.Unknown
-					|| trackingHeight > _savedTrackingHeight))
+			var bestHeight = BestHeight;
+			var trackerBlockCount = Tracker.BlockCount;
+			if (bestHeight.Type == HeightType.Chain
+				&& (_savedTrackerBlockCount == -1
+					|| trackerBlockCount > _savedTrackerBlockCount))
 		    {
 			    await Tracker.SaveAsync(_trackerFolderPath).ConfigureAwait(false);
-			    Debug.WriteLine($"Saved {nameof(Tracker)} at height: {trackingHeight}");
-			    _savedTrackingHeight = trackingHeight;
+			    Debug.WriteLine($"Saved {nameof(Tracker)} at height: {bestHeight} and block count: {trackerBlockCount}");
+			    _savedTrackerBlockCount = trackerBlockCount;
 		    }
 	    }
 

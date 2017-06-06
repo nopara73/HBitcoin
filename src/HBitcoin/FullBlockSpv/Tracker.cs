@@ -132,7 +132,14 @@ namespace HBitcoin.FullBlockSpv
 						// add it back as a mempool transaction, it'll drop out anyway
 						TrackedTransactions.TryAdd(new SmartTransaction(tx.Transaction, Height.MemPool));
 					}
-					BestHeight = MerkleChain.Max().Height;
+					if (MerkleChain.Count != 0)
+					{
+						BestHeight = MerkleChain.Max().Height;
+					}
+					else
+					{
+						BestHeight = Height.Unknown;
+					}
 				}
 			}
 		}
@@ -233,7 +240,10 @@ namespace HBitcoin.FullBlockSpv
 			}
 
 			MerkleChain.Add(smartMerkleBlock);
-			BestHeight = height;
+			if (BestHeight < height || BestHeight == Height.Unknown)
+			{
+				BestHeight = height;
+			}
 
 			return foundTransactions;
 		}
@@ -345,10 +355,20 @@ namespace HBitcoin.FullBlockSpv
 				{
 					foreach (var block in Util.Separate(File.ReadAllBytes(pbc), blockSep))
 					{
-						SmartMerkleBlock smartMerkleBlock = SmartMerkleBlock.FromBytes(block);
-						MerkleChain.Add(smartMerkleBlock);
+						try
+						{
+							SmartMerkleBlock smartMerkleBlock = SmartMerkleBlock.FromBytes(block);
+							MerkleChain.Add(smartMerkleBlock);
+						}
+						catch(EndOfStreamException)
+						{
+							// Some corruption is fine, the software will self correct and save the right data
+						}
 					}
-					BestHeight = MerkleChain.Max().Height;
+					if (MerkleChain.Count != 0)
+					{
+						BestHeight = MerkleChain.Max().Height;
+					}
 				}
 			}
 			finally

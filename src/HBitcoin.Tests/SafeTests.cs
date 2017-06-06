@@ -72,9 +72,9 @@ namespace HBitcoin.Tests
 				Assert.Equal(safe.ExtKey.ScriptPubKey, loadedSafe.ExtKey.ScriptPubKey);
 				Assert.Equal(safe.ExtKey.ScriptPubKey, loadedSafe.ExtKey.ScriptPubKey);
 				Assert.Equal(loadedSafe.BitcoinExtKey, recoverdSafe.BitcoinExtKey);
-				Assert.Equal(loadedSafe.BitcoinExtPubKey, recoverdSafe.BitcoinExtPubKey);
+				Assert.Equal(loadedSafe.GetBitcoinExtPubKey(index: null, hdPathType: HdPathType.NonHardened, account: new SafeAccount(1)), recoverdSafe.GetBitcoinExtPubKey(index: null, hdPathType: HdPathType.NonHardened, account: new SafeAccount(1)));
 				Assert.Equal(loadedSafe.GetAddress(index), recoverdSafe.GetAddress(index));
-				Assert.Equal(loadedSafe.GetPrivateKey(index), recoverdSafe.GetPrivateKey(index));
+				Assert.Equal(loadedSafe.GetBitcoinExtKey(index), recoverdSafe.GetBitcoinExtKey(index));
 			}
 			finally
 			{

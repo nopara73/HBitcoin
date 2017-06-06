@@ -88,26 +88,37 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
+		private SemaphoreSlim _sem = new SemaphoreSlim(1, 1);
+
 		private async Task DownloadNextBlocks(Node node, CancellationToken ctsToken, int maxBlocksToDownload = 1)
 		{
-			if (BlocksToDownload.Count == 0)
-			{
-				await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
-				return;
-			}
-			
-			if(BlocksToDownload.Count < maxBlocksToDownload * 2)
-			{
-				maxBlocksToDownload = 1;
-			}
-
 			var heights = new List<Height>();
-			for (int i = 0; i < maxBlocksToDownload; i++)
+			try
 			{
-				// todo check if we have that much block
-				var height = BlocksToDownload.Min();
-				BlocksToDownload.TryRemove(height);
-				heights.Add(height);
+				await _sem.WaitAsync(ctsToken).ConfigureAwait(false);
+
+				if (BlocksToDownload.Count == 0)
+				{
+					await Task.Delay(100, ctsToken).ContinueWith(tsk => { }).ConfigureAwait(false);
+					return;
+				}
+
+				if (BlocksToDownload.Count < maxBlocksToDownload * 2)
+				{
+					maxBlocksToDownload = 1;
+				}
+
+				for (int i = 0; i < maxBlocksToDownload; i++)
+				{
+					// todo check if we have that much block
+					var height = BlocksToDownload.Min();
+					BlocksToDownload.TryRemove(height);
+					heights.Add(height);
+				}
+			}
+			finally
+			{
+				_sem.Release();
 			}
 			try
 			{
@@ -155,9 +166,18 @@ namespace HBitcoin.FullBlockSpv
 			}
 			catch
 			{
-				foreach (var height in heights)
+				try
 				{
-					BlocksToDownload.Add(height);
+					await _sem.WaitAsync(ctsToken).ConfigureAwait(false);
+
+					foreach (var height in heights)
+					{
+						BlocksToDownload.Add(height);
+					}
+				}
+				finally
+				{
+					_sem.Release();
 				}
 			}
 		}

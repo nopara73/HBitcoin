@@ -34,16 +34,16 @@ namespace HBitcoin.MemPool
 
 		public static bool ForcefullyStopped { get; set; } = false;
 		internal static bool Enabled { get; set; } = true;
+		private static bool ShouldNotRunYet => !Enabled || ForcefullyStopped || WalletJob.Nodes.ConnectedNodes.Count <= 3;
 
-        public static async Task StartAsync(CancellationToken ctsToken)
+		public static async Task StartAsync(CancellationToken ctsToken)
 		{
 			while (true)
 			{
 				try
 				{
 					if (ctsToken.IsCancellationRequested) return;
-
-					if(!Enabled || ForcefullyStopped || WalletJob.Nodes.ConnectedNodes.Count <= 3)
+					if (ShouldNotRunYet)
 					{
 						_notNeededTransactions.Clear(); // should not grow infinitely
 						await Task.Delay(100, ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
@@ -57,15 +57,15 @@ namespace HBitcoin.MemPool
 					Transactions = new ConcurrentHashSet<uint256>(currentMemPoolTransactions);
 					_notNeededTransactions.Clear();
 
-					if(!SyncedOnce)
+					if (!SyncedOnce)
 					{
 						SyncedOnce = true;
 					}
 					OnSynced();
-					
+
 					await Task.Delay(TimeSpan.FromMinutes(3), ctsToken).ContinueWith(t => { }).ConfigureAwait(false);
 				}
-				catch(OperationCanceledException)
+				catch (OperationCanceledException)
 				{
 					continue;
 				}
@@ -75,9 +75,11 @@ namespace HBitcoin.MemPool
 					Debug.WriteLine(ex);
 				}
 			}
-		}
+		}		
 
-	    private static async Task<IEnumerable<uint256>> UpdateAsync(CancellationToken ctsToken)
+		private static int _getMempoolTransactionsTimeoutSec = 30;
+		private static CancellationTokenSource _getMempoolTransactionsTimeoutSource;
+		private static async Task<IEnumerable<uint256>> UpdateAsync(CancellationToken ctsToken)
 	    {
 		    var txidsWeAlreadyHadAndFound = new HashSet<uint256>();
 
@@ -91,11 +93,13 @@ namespace HBitcoin.MemPool
                     var txidsWeNeed = new HashSet<uint256>();
 					var sw = new Stopwatch();
 					sw.Start();
-					var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(21));
+					var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 					var ctsTokenGetMempool = CancellationTokenSource.CreateLinkedTokenSource(ctsToken, timeout.Token);
 					var txidsOfNode = await Task.Run(() => node.GetMempool(ctsTokenGetMempool.Token)).ConfigureAwait(false);
 					sw.Stop();
 					Debug.WriteLine($"GetMempool(), txs: {txidsOfNode.Count()}, secs: {sw.Elapsed.TotalSeconds}");
+					if (ShouldNotRunYet) break;
+
 					foreach (var txid in txidsOfNode)
                     {
                         // if we had it in prevcycle note we found it again
@@ -115,16 +119,24 @@ namespace HBitcoin.MemPool
                     foreach (var txIdsPiece in txIdsPieces)
                     {
 						sw.Restart();
-						
-						var timeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(21));
-						var ctsTokenGetMempoolTransactions = CancellationTokenSource.CreateLinkedTokenSource(ctsToken, timeoutSource.Token);
-						Transaction[] txPiece = await Task.Run(() => node.GetMempoolTransactions(txIdsPiece.ToArray(), ctsTokenGetMempoolTransactions.Token)).ConfigureAwait(false);
+						_getMempoolTransactionsTimeoutSource = new CancellationTokenSource(TimeSpan.FromSeconds(_getMempoolTransactionsTimeoutSec));
+						var ctsTokenGetMempoolTransactions = CancellationTokenSource.CreateLinkedTokenSource(ctsToken, _getMempoolTransactionsTimeoutSource.Token);
+						Transaction[] txsPiece = await Task.Run(() => node.GetMempoolTransactions(txIdsPiece.ToArray(), ctsTokenGetMempoolTransactions.Token)).ConfigureAwait(false);
 						sw.Stop();
-						Debug.WriteLine($"GetMempoolTransactions(), asked txs: {txIdsPiece.Count()}, actual txs: {txPiece.Count()}, secs: {sw.Elapsed.TotalSeconds}");
+						Debug.WriteLine($"GetMempoolTransactions(), asked txs: {txIdsPiece.Count()}, actual txs: {txsPiece.Count()}, secs: {sw.Elapsed.TotalSeconds}");
+						
+						// if node doesn't give us pieces disconnect				
+						if (txIdsPiece.Count() != 0 && txsPiece.Count() == 0)
+						{
+							node.Disconnect();
+							node.Dispose();
+							Debug.WriteLine("Disconnected node, because it did not return transactions.");
+							break;
+						}
 
 						foreach (
                             var tx in
-							txPiece)
+							txsPiece)
                         {
                             if (!node.IsConnected) continue;
                             if (ctsToken.IsCancellationRequested) continue;
@@ -140,11 +152,12 @@ namespace HBitcoin.MemPool
 									}
 								}
 							}
-                        }						
+						}
+						if (ShouldNotRunYet) break;
 					}
 
 					// if the node has very few transactions disconnect it					
-					if (WalletJob.CurrentNetwork == Network.Main && txidsOfNode.Count() <= 1)
+					if (node.IsConnected && WalletJob.CurrentNetwork == Network.Main && txidsOfNode.Count() <= 1)
 					{
 						node.Disconnect();
 						node.Dispose();
@@ -153,6 +166,12 @@ namespace HBitcoin.MemPool
                 }
 				catch (OperationCanceledException ex)
 				{
+					if (_getMempoolTransactionsTimeoutSource.IsCancellationRequested)
+					{
+						_getMempoolTransactionsTimeoutSec++;
+						Debug.WriteLine($"New GetMempoolTransactions() timeout: {_getMempoolTransactionsTimeoutSec}");
+					}
+
 					if (!ctsToken.IsCancellationRequested)
 					{
 						Debug.WriteLine($"Node exception in MemPool, disconnect node, continue with next node:");

@@ -143,22 +143,29 @@ namespace HBitcoin.Tests
 
 	    public static async Task<IEnumerable<BalanceModel>> GetBalancesAsync(QBitNinjaClient client, IEnumerable<BitcoinAddress> addresses, bool unspentOnly)
 	    {
-		    var tasks = new HashSet<Task<BalanceModel>>();
-		    foreach (var dest in addresses)
-		    {
-			    var task = client.GetBalance(dest, unspentOnly);
+			//var tasks = new HashSet<Task<BalanceModel>>();
+			//foreach (var dest in addresses)
+			//{
+			// var task = client.GetBalance(dest, unspentOnly);
 
-			    tasks.Add(task);
-		    }
+			// tasks.Add(task);
+			//}
 
-		    await Task.WhenAll(tasks).ConfigureAwait(false);
+			//await Task.WhenAll(tasks).ConfigureAwait(false);
 
-		    var results = new HashSet<BalanceModel>();
-		    foreach (var task in tasks)
-			    results.Add(await task.ConfigureAwait(false));
+			//var results = new HashSet<BalanceModel>();
+			//foreach (var task in tasks)
+			// results.Add(await task.ConfigureAwait(false));
 
-		    return results;
-	    }
+			//return results;
+			var results = new HashSet<BalanceModel>();
+			foreach (var dest in addresses)
+			{
+				results.Add(await client.GetBalance(dest, unspentOnly).ConfigureAwait(false));
+			}
+
+			return results;
+		}
 
 	    public static void ReportFullHistory(WalletJob walletJob)
 	    {

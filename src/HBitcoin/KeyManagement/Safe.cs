@@ -16,12 +16,12 @@ namespace HBitcoin.KeyManagement
 		public DateTimeOffset CreationTime { get; }
 
 		public ExtKey ExtKey { get; private set; }
-		public BitcoinExtPubKey BitcoinExtPubKey => ExtKey.Neuter().GetWif(Network);
 		public BitcoinExtKey BitcoinExtKey => ExtKey.GetWif(Network);
+		public BitcoinExtPubKey GetBitcoinExtPubKey(int? index = null, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null) => GetBitcoinExtKey(index, hdPathType, account).Neuter();
 
 		public BitcoinAddress GetAddress(int index, HdPathType hdPathType = HdPathType.Receive, SafeAccount account  = null)
 		{
-			return GetPrivateKey(index, hdPathType, account).ScriptPubKey.GetDestinationAddress(Network);
+			return GetBitcoinExtKey(index, hdPathType, account).ScriptPubKey.GetDestinationAddress(Network);
 		}
 
 		public IList<BitcoinAddress> GetFirstNAddresses(int addressCount, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null)
@@ -41,7 +41,7 @@ namespace HBitcoin.KeyManagement
 		// Let's get the address, you can't directly access it from the safe
 		// Also nobody would ever use this address for anythin
 		/// <summary> If the wallet only differs by CreationTime, the UniqueId will be the same </summary>
-		public string UniqueId => BitcoinExtPubKey.ExtPubKey.PubKey.GetAddress(Network).ToWif();
+		public string UniqueId => BitcoinExtKey.Neuter().ExtPubKey.PubKey.GetAddress(Network).ToWif();
 		
 		public string WalletFilePath { get; }
 
@@ -175,17 +175,17 @@ namespace HBitcoin.KeyManagement
 			for (int i = 0; i < stopSearchAfterIteration; i++)
 			{
 				if (GetAddress(i, HdPathType.Receive, account) == address)
-					return GetPrivateKey(i, HdPathType.Receive, account);
+					return GetBitcoinExtKey(i, HdPathType.Receive, account);
 				if (GetAddress(i, HdPathType.Change, account) == address)
-					return GetPrivateKey(i, HdPathType.Change, account);
+					return GetBitcoinExtKey(i, HdPathType.Change, account);
 				if (GetAddress(i, HdPathType.NonHardened, account) == address)
-					return GetPrivateKey(i, HdPathType.NonHardened, account);
+					return GetBitcoinExtKey(i, HdPathType.NonHardened, account);
 			}
 
 			throw new KeyNotFoundException(address.ToWif());
 		}
 
-		public BitcoinExtKey GetPrivateKey(int index, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null)
+		public BitcoinExtKey GetBitcoinExtKey(int? index = null, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null)
 		{
 			string firstPart = "";
 			if(account != null)
@@ -195,11 +195,18 @@ namespace HBitcoin.KeyManagement
 
 			firstPart += Hierarchy.GetPathString(hdPathType);
 			string lastPart;
-			if(hdPathType == HdPathType.NonHardened)
+			if (index == null)
+			{
+				lastPart = "";
+			}
+			else if (hdPathType == HdPathType.NonHardened)
 			{
 				lastPart = $"/{index}";
 			}
-			else lastPart = $"/{index}'";
+			else
+			{
+				lastPart = $"/{index}'";
+			}
 
 			KeyPath keyPath = new KeyPath(firstPart + lastPart);
 
