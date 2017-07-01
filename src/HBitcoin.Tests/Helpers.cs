@@ -16,7 +16,7 @@ namespace HBitcoin.Tests
 {
     public static class Helpers
     {
-		public static SocksPortHandler SocksPortHandler = new SocksPortHandler("127.0.0.1", socksPort: 9050, ignoreSslCertification: true);
+		public static SocksPortHandler SocksPortHandler = new SocksPortHandler("127.0.0.1", socksPort: 9050);
 		public static DotNetTor.ControlPort.Client ControlPortClient = new DotNetTor.ControlPort.Client("127.0.0.1", controlPort: 9051, password: "ILoveBitcoin21");
 
 		public const string CommittedWalletsFolderPath = "../../../CommittedWallets";

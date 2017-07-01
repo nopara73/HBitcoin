@@ -41,7 +41,7 @@ namespace HBitcoin.KeyManagement
 		// Let's get the address, you can't directly access it from the safe
 		// Also nobody would ever use this address for anythin
 		/// <summary> If the wallet only differs by CreationTime, the UniqueId will be the same </summary>
-		public string UniqueId => BitcoinExtKey.Neuter().ExtPubKey.PubKey.GetAddress(Network).ToWif();
+		public string UniqueId => BitcoinExtKey.Neuter().ExtPubKey.PubKey.GetAddress(Network).ToString();
 		
 		public string WalletFilePath { get; }
 
@@ -182,7 +182,7 @@ namespace HBitcoin.KeyManagement
 					return GetBitcoinExtKey(i, HdPathType.NonHardened, account);
 			}
 
-			throw new KeyNotFoundException(address.ToWif());
+			throw new KeyNotFoundException(address.ToString());
 		}
 
 		public BitcoinExtKey GetBitcoinExtKey(int? index = null, HdPathType hdPathType = HdPathType.Receive, SafeAccount account = null)

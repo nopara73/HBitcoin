@@ -155,7 +155,7 @@ namespace HBitcoin.Tests
 				}
 
 				var hasMoneyAddress = BitcoinAddress.Create("mmVZjqZjmLvxc3YFhWqYWoe5anrWVcoJcc");
-				Debug.WriteLine($"Checking proper balance on {hasMoneyAddress.ToWif()}");
+				Debug.WriteLine($"Checking proper balance on {hasMoneyAddress.ToString()}");
 
 				var record = walletJob.GetSafeHistory().FirstOrDefault();
 				Assert.True(record != default(SafeHistoryRecord));
