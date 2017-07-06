@@ -55,11 +55,8 @@ namespace HBitcoin.MemPool
 
 		private async Task ProcessInvAsync(Node node, InvPayload invPayload)
 		{
-			if (invPayload.Inventory.Count > MAX_INV_SIZE)
-			{
-				return;
-			}
-			
+			if (invPayload.Inventory.Count > MAX_INV_SIZE) return;
+
 			var send = new GetDataPayload();
 			foreach (var inv in invPayload.Inventory.Where(inv => inv.Type.HasFlag(InventoryType.MSG_TX)))
 			{
