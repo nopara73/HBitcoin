@@ -16,7 +16,7 @@
     <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
     <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
     <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
-    <Version>0.1.8.1</Version>
+    <Version>0.1.8.2</Version>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -26,8 +26,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNetTor" Version="2.2.0.1" />
-    <PackageReference Include="NBitcoin" Version="4.0.0.6" />
+    <PackageReference Include="DotNetTor" Version="2.2.0.2" />
+    <PackageReference Include="NBitcoin" Version="4.0.0.8" />
     <PackageReference Include="ConcurrentHashSet" Version="1.0.1" />
     <PackageReference Include="QBitNinja.Client" Version="1.0.3.39" />
   </ItemGroup>
