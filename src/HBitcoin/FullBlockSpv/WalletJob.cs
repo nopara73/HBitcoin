@@ -37,7 +37,7 @@ namespace HBitcoin.FullBlockSpv
         private static HttpClient _torHttpClient;
 		private static DotNetTor.ControlPort.Client _controlPortClient;
 
-		public BlockDownloader BlockDownloader;
+		public BlockDownloader BlockDownloader;		
 
 		private Height _creationHeight;
 		public Height CreationHeight
@@ -1265,6 +1265,15 @@ namespace HBitcoin.FullBlockSpv
 		{
 			public bool Success;
 			public string FailingReason;
+		}
+
+		#endregion
+
+		#region TumbleBit
+
+		public async Task<string> GetTumblerInfoAsync(Uri uri)
+		{
+			throw new NotImplementedException();
 		}
 
 		#endregion
