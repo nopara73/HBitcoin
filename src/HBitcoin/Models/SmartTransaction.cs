@@ -1,13 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using HBitcoin.Models;
 using NBitcoin;
 
 namespace HBitcoin.Models
 {
-    public class SmartTransaction: IEquatable<SmartTransaction>
+	public class SmartTransaction: IEquatable<SmartTransaction>
 	{
 		#region Members
 		

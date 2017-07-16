@@ -1,15 +1,12 @@
 ﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Threading.Tasks;
 using HBitcoin.Models;
 using NBitcoin;
 
 namespace HBitcoin.FullBlockSpv
 {
-    public class UnprocessedBlockBuffer
+	public class UnprocessedBlockBuffer
     {
 	    public const int Capacity = 50;
 		private readonly ConcurrentObservableDictionary<Height, Block> _blocks = new ConcurrentObservableDictionary<Height, Block>();

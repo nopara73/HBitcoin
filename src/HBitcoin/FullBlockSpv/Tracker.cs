@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -13,7 +12,7 @@ using NBitcoin;
 
 namespace HBitcoin.FullBlockSpv
 {
-    public class Tracker
+	public class Tracker
     {
 		#region Members
 

@@ -26,10 +26,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DotNetTor" Version="2.2.0.2" />
+    <PackageReference Include="DBreeze" Version="1.88.0" />
+    <PackageReference Include="DotNetTor" Version="2.2.4.1" />
     <PackageReference Include="NBitcoin" Version="4.0.0.8" />
     <PackageReference Include="ConcurrentHashSet" Version="1.0.1" />
     <PackageReference Include="QBitNinja.Client" Version="1.0.3.39" />
+    <PackageReference Include="System.Diagnostics.Process" Version="4.3.0" />
+    <PackageReference Include="System.Runtime.Loader" Version="4.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="TumbleBit\" />
   </ItemGroup>
 
 </Project>

@@ -1,7 +1,6 @@
 ﻿//from https://github.com/brianchance/MonoTouchMVVMCrossValidationTester/blob/master/Validation.Core/ConcurrentObservableDictionary.cs
 //modified
 
-using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.ComponentModel;
