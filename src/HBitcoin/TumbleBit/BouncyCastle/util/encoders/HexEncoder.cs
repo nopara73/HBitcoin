@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace NTumbleBit.BouncyCastle.Utilities.Encoders
+namespace HBitcoin.TumbleBit.BouncyCastle.Utilities.Encoders
 {
 	internal class HexEncoder
 		: IEncoder

@@ -1,15 +1,15 @@
-﻿using NTumbleBit.PuzzleSolver;
+﻿using HBitcoin.TumbleBit.PuzzleSolver;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
 using NBitcoin;
-using NTumbleBit.PuzzlePromise;
-using NTumbleBit.Services;
-using NTumbleBit.ClassicTumbler.Models;
+using HBitcoin.TumbleBit.PuzzlePromise;
+using HBitcoin.TumbleBit.Services;
+using HBitcoin.TumbleBit.ClassicTumbler.Models;
 using System.Threading;
 using System.Diagnostics;
 
-namespace NTumbleBit.ClassicTumbler.Client
+namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 {
 	public class PaymentStateMachine
 	{

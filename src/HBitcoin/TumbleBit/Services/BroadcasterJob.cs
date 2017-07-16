@@ -5,7 +5,7 @@ using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace NTumbleBit.Services
+namespace HBitcoin.TumbleBit.Services
 {
 	public class BroadcasterJob : TumblerServiceBase
 	{

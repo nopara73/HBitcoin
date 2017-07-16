@@ -1,4 +1,4 @@
-namespace NTumbleBit.BouncyCastle.Crypto
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto
 {
 	/// <remarks>Base interface for a public/private key block cipher.</remarks>
 	internal interface IAsymmetricBlockCipher

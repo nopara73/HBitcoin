@@ -5,7 +5,7 @@ using System.IO;
 using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 
-namespace NTumbleBit.Configuration
+namespace HBitcoin.TumbleBit.Configuration
 {
 	public class RPCArgs
 	{

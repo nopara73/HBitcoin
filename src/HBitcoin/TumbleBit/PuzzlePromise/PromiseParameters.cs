@@ -3,7 +3,7 @@ using NBitcoin.Crypto;
 using System;
 using System.Linq;
 
-namespace NTumbleBit.PuzzlePromise
+namespace HBitcoin.TumbleBit.PuzzlePromise
 {
 	public class PromiseParameters
 	{

@@ -1,6 +1,6 @@
-using NTumbleBit.BouncyCastle.Math;
+using HBitcoin.TumbleBit.BouncyCastle.Math;
 
-namespace NTumbleBit.BouncyCastle.Crypto
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto
 {
 	/**
      * interface for classes implementing the Digital Signature Algorithm

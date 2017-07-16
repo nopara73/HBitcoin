@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NTumbleBit.Services
+namespace HBitcoin.TumbleBit.Services
 {
 	public interface IRepository
 	{

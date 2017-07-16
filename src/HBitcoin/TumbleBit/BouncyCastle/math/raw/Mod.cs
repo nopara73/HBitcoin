@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Diagnostics;
 
-using NTumbleBit.BouncyCastle.Crypto.Utilities;
-using NTumbleBit.BouncyCastle.Security;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Security;
 
-namespace NTumbleBit.BouncyCastle.Math.Raw
+namespace HBitcoin.TumbleBit.BouncyCastle.Math.Raw
 {
 	internal abstract class Mod
 	{

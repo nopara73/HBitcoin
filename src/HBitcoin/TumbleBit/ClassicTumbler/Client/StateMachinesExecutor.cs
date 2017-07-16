@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace NTumbleBit.ClassicTumbler.Client
+namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 {
 	public class StateMachinesExecutor : TumblerServiceBase
 	{

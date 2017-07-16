@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 
-namespace NTumbleBit
+namespace HBitcoin.TumbleBit
 {
 	public class NullDisposable : IDisposable
 	{

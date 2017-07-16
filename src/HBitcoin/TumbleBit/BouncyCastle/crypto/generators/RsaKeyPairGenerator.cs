@@ -1,7 +1,7 @@
-﻿using NTumbleBit.BouncyCastle.Crypto.Parameters;
-using NTumbleBit.BouncyCastle.Math;
+﻿using HBitcoin.TumbleBit.BouncyCastle.Crypto.Parameters;
+using HBitcoin.TumbleBit.BouncyCastle.Math;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Generators
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Generators
 {
 	/**
      * an RSA key pair generator.

@@ -1,8 +1,8 @@
 using System;
 
-using NTumbleBit.BouncyCastle.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Utilities;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Digests
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Digests
 {
 	/**
     * base implementation of MD4 family style digest as outlined in

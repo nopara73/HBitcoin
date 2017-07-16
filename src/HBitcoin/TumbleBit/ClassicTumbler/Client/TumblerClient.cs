@@ -1,7 +1,7 @@
 ﻿using NBitcoin;
-using NTumbleBit.ClassicTumbler.Models;
-using NTumbleBit.PuzzlePromise;
-using NTumbleBit.PuzzleSolver;
+using HBitcoin.TumbleBit.ClassicTumbler.Models;
+using HBitcoin.TumbleBit.PuzzlePromise;
+using HBitcoin.TumbleBit.PuzzleSolver;
 using System;
 using System.Net;
 using System.Net.Http;
@@ -11,7 +11,7 @@ using System.IO;
 using System.Threading;
 using System.Diagnostics;
 
-namespace NTumbleBit.ClassicTumbler.Client
+namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 {
 	public class TumblerClient
 	{

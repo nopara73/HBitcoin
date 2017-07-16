@@ -1,7 +1,7 @@
 ﻿using NBitcoin.RPC;
-using NTumbleBit.Services.RPC;
+using HBitcoin.TumbleBit.Services.RPC;
 
-namespace NTumbleBit.Services
+namespace HBitcoin.TumbleBit.Services
 {
 	public class ExternalServices
     {

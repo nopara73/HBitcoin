@@ -1,6 +1,6 @@
 using System;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Parameters
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Parameters
 {
 	internal class KeyParameter
 		: ICipherParameters

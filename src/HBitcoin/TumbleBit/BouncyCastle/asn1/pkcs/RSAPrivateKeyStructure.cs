@@ -1,7 +1,7 @@
 ﻿using System;
 
-using NTumbleBit.BouncyCastle.Asn1;
-using NTumbleBit.BouncyCastle.Math;
+using HBitcoin.TumbleBit.BouncyCastle.Asn1;
+using HBitcoin.TumbleBit.BouncyCastle.Math;
 
 namespace Org.BouncyCastle.Asn1.Pkcs
 {

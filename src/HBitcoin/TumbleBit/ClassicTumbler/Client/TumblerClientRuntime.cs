@@ -4,12 +4,12 @@ using NBitcoin;
 using System.IO;
 using NBitcoin.RPC;
 using System.Threading.Tasks;
-using NTumbleBit.Services;
-using NTumbleBit.Configuration;
+using HBitcoin.TumbleBit.Services;
+using HBitcoin.TumbleBit.Configuration;
 using System.Threading;
 using System.Diagnostics;
 
-namespace NTumbleBit.ClassicTumbler.Client
+namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 {
 	public class PrematureRequestException : Exception
 	{

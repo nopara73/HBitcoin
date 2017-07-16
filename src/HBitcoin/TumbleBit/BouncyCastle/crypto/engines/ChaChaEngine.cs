@@ -1,8 +1,8 @@
 ﻿using System;
 
-using NTumbleBit.BouncyCastle.Crypto.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Utilities;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Engines
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Engines
 {
 	/// <summary>
 	/// Implementation of Daniel J. Bernstein's ChaCha stream cipher.

@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NTumbleBit.Configuration
+namespace HBitcoin.TumbleBit.Configuration
 {
 	public class ConfigException : Exception
 	{

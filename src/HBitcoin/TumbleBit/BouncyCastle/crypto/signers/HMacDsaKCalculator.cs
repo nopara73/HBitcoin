@@ -1,12 +1,12 @@
 ﻿using System;
 
-using NTumbleBit.BouncyCastle.Crypto.Macs;
-using NTumbleBit.BouncyCastle.Crypto.Parameters;
-using NTumbleBit.BouncyCastle.Math;
-using NTumbleBit.BouncyCastle.Security;
-using NTumbleBit.BouncyCastle.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Macs;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Parameters;
+using HBitcoin.TumbleBit.BouncyCastle.Math;
+using HBitcoin.TumbleBit.BouncyCastle.Security;
+using HBitcoin.TumbleBit.BouncyCastle.Utilities;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Signers
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Signers
 {
 	/**
      * A deterministic K calculator based on the algorithm in section 3.2 of RFC 6979.

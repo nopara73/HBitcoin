@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace NTumbleBit.JsonConverters
+namespace HBitcoin.TumbleBit.JsonConverters
 {
 	public class OverridesJsonConverter : JsonConverter
 	{

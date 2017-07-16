@@ -1,4 +1,4 @@
-namespace NTumbleBit.BouncyCastle.Utilities
+namespace HBitcoin.TumbleBit.BouncyCastle.Utilities
 {
 	internal interface IMemoable
 	{

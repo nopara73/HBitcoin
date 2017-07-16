@@ -1,4 +1,4 @@
-namespace NTumbleBit.BouncyCastle.Asn1
+namespace HBitcoin.TumbleBit.BouncyCastle.Asn1
 {
 	internal interface Asn1SequenceParser
 		: IAsn1Convertible

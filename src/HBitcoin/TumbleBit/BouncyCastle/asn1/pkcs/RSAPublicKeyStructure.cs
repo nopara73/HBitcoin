@@ -1,8 +1,8 @@
-﻿using NTumbleBit.BouncyCastle.Math;
+﻿using HBitcoin.TumbleBit.BouncyCastle.Math;
 
 using System;
 
-namespace NTumbleBit.BouncyCastle.Asn1.X509
+namespace HBitcoin.TumbleBit.BouncyCastle.Asn1.X509
 {
 	internal class RsaPublicKeyStructure
 		: Asn1Encodable

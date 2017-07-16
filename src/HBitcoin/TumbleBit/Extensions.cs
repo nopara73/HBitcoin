@@ -4,7 +4,7 @@ using System;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace NTumbleBit
+namespace HBitcoin.TumbleBit
 {
 	public static class Extensions
 	{

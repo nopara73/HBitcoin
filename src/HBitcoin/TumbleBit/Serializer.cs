@@ -1,11 +1,11 @@
 ﻿using NBitcoin;
 using Newtonsoft.Json;
-using NTumbleBit.JsonConverters;
+using HBitcoin.TumbleBit.JsonConverters;
 using Newtonsoft.Json.Converters;
-using NTumbleBit.ClassicTumbler;
+using HBitcoin.TumbleBit.ClassicTumbler;
 using System.Linq;
 
-namespace NTumbleBit
+namespace HBitcoin.TumbleBit
 {
 	public class Serializer
 	{

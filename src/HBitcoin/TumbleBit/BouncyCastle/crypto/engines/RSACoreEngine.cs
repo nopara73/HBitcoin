@@ -1,9 +1,9 @@
 ﻿
-using NTumbleBit.BouncyCastle.Crypto.Parameters;
-using NTumbleBit.BouncyCastle.Math;
-using NTumbleBit.BouncyCastle.Security;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Parameters;
+using HBitcoin.TumbleBit.BouncyCastle.Math;
+using HBitcoin.TumbleBit.BouncyCastle.Security;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Engines
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Engines
 {
 	/**
 	* this does your basic RSA algorithm.

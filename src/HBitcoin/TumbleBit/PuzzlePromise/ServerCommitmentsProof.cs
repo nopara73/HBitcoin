@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NTumbleBit.PuzzlePromise
+namespace HBitcoin.TumbleBit.PuzzlePromise
 {
 	public class ServerCommitmentsProof
 	{

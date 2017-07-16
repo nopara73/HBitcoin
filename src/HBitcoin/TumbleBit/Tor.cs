@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Net.Http;
 
-namespace NTumbleBit
+namespace HBitcoin.TumbleBit
 {
 	public static class Tor
 	{

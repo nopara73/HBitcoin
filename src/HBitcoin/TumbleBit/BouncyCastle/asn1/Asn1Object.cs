@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace NTumbleBit.BouncyCastle.Asn1
+namespace HBitcoin.TumbleBit.BouncyCastle.Asn1
 {
 	internal abstract class Asn1Object
 		: Asn1Encodable

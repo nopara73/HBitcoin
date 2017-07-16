@@ -1,7 +1,7 @@
-﻿using NTumbleBit.BouncyCastle.Math;
-using NTumbleBit.BouncyCastle.Security;
+﻿using HBitcoin.TumbleBit.BouncyCastle.Math;
+using HBitcoin.TumbleBit.BouncyCastle.Security;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Parameters
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Parameters
 {
 	internal class RsaKeyGenerationParameters
 		: KeyGenerationParameters

@@ -1,6 +1,6 @@
 ﻿using NBitcoin;
 
-namespace NTumbleBit.Services
+namespace HBitcoin.TumbleBit.Services
 {
 	public interface ITrustedBroadcastService
     {

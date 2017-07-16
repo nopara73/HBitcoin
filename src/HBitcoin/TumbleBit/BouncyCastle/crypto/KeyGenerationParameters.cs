@@ -1,7 +1,7 @@
 ﻿using System;
-using NTumbleBit.BouncyCastle.Security;
+using HBitcoin.TumbleBit.BouncyCastle.Security;
 
-namespace NTumbleBit.BouncyCastle.Crypto
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto
 {
 	/**
      * The base class for parameters to key generators.

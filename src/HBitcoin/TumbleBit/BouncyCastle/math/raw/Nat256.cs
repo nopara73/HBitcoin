@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Diagnostics;
 
-using NTumbleBit.BouncyCastle.Crypto.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Utilities;
 
-namespace NTumbleBit.BouncyCastle.Math.Raw
+namespace HBitcoin.TumbleBit.BouncyCastle.Math.Raw
 {
 	internal abstract class Nat256
 	{

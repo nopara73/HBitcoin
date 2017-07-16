@@ -1,4 +1,4 @@
-namespace NTumbleBit.BouncyCastle.Crypto.Paddings
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Paddings
 {
 	/**
     * A padder that adds Pkcs7/Pkcs5 padding to a block.

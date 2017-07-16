@@ -1,10 +1,10 @@
 using System;
 
-using NTumbleBit.BouncyCastle.Crypto.Parameters;
-using NTumbleBit.BouncyCastle.Crypto.Utilities;
-using NTumbleBit.BouncyCastle.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Parameters;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Utilities;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Engines
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Engines
 {
 	/**
     * an implementation of the AES (Rijndael)), from FIPS-197.

@@ -3,7 +3,7 @@ using NBitcoin.Crypto;
 using System;
 using System.Collections.Generic;
 
-namespace NTumbleBit.ClassicTumbler
+namespace HBitcoin.TumbleBit.ClassicTumbler
 {
 	public class OverlappedCycleGenerator : IBitcoinSerializable
 	{

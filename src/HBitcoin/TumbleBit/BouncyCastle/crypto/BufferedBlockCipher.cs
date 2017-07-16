@@ -1,6 +1,6 @@
 using System;
 
-namespace NTumbleBit.BouncyCastle.Crypto
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto
 {
 	/**
 	* A wrapper class that allows block ciphers to be used to process data in

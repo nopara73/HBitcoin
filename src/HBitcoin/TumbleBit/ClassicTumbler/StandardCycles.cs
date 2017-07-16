@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace NTumbleBit.ClassicTumbler
+namespace HBitcoin.TumbleBit.ClassicTumbler
 {
 	public class StandardCycle
 	{

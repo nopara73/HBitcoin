@@ -2,7 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace NTumbleBit
+namespace HBitcoin.TumbleBit
 {
 	public abstract class TumblerServiceBase : ITumblerService
 	{

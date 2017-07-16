@@ -1,7 +1,7 @@
 ﻿using NBitcoin;
 using System;
 
-namespace NTumbleBit.Services
+namespace HBitcoin.TumbleBit.Services
 {
 	public class FeeRateUnavailableException : Exception
 	{

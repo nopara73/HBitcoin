@@ -1,10 +1,10 @@
 ﻿using NBitcoin;
-using NTumbleBit.PuzzlePromise;
-using NTumbleBit.PuzzleSolver;
+using HBitcoin.TumbleBit.PuzzlePromise;
+using HBitcoin.TumbleBit.PuzzleSolver;
 using System;
 using System.Linq;
 
-namespace NTumbleBit.ClassicTumbler
+namespace HBitcoin.TumbleBit.ClassicTumbler
 {
 	public enum TumblerClientSessionStates
 	{

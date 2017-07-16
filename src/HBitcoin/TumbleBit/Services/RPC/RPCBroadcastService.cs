@@ -5,7 +5,7 @@ using System.Linq;
 using NBitcoin;
 using System.Diagnostics;
 
-namespace NTumbleBit.Services.RPC
+namespace HBitcoin.TumbleBit.Services.RPC
 {
 	public class RPCBroadcastService : IBroadcastService
 	{

@@ -1,4 +1,4 @@
-namespace NTumbleBit.BouncyCastle.Crypto
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto
 {
 	/// <remarks>Block cipher engines are expected to conform to this interface.</remarks>
 	internal interface IBufferedCipher

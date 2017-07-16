@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Net;
 
-namespace NTumbleBit.Configuration
+namespace HBitcoin.TumbleBit.Configuration
 {
 
 	public class ConfigurationException : Exception

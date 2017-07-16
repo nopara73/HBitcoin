@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace NTumbleBit
+namespace HBitcoin.TumbleBit
 {
 	public class TrustedBroadcastRequest
 	{

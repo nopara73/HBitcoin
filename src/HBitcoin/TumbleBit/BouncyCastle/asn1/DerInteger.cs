@@ -1,9 +1,9 @@
 using System;
 
-using NTumbleBit.BouncyCastle.Math;
-using NTumbleBit.BouncyCastle.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Math;
+using HBitcoin.TumbleBit.BouncyCastle.Utilities;
 
-namespace NTumbleBit.BouncyCastle.Asn1
+namespace HBitcoin.TumbleBit.BouncyCastle.Asn1
 {
 	internal class DerInteger
 		: Asn1Object

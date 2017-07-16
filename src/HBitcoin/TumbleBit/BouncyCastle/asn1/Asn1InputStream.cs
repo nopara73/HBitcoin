@@ -1,9 +1,9 @@
 using System;
 using System.IO;
 
-using NTumbleBit.BouncyCastle.Utilities.IO;
+using HBitcoin.TumbleBit.BouncyCastle.Utilities.IO;
 
-namespace NTumbleBit.BouncyCastle.Asn1
+namespace HBitcoin.TumbleBit.BouncyCastle.Asn1
 {
 	/**
 	 * a general purpose ASN.1 decoder - note: this class differs from the

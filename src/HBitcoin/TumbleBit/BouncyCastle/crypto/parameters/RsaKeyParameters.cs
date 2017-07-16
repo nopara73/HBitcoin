@@ -1,7 +1,7 @@
 ﻿using System;
-using NTumbleBit.BouncyCastle.Math;
+using HBitcoin.TumbleBit.BouncyCastle.Math;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Parameters
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Parameters
 {
 	internal class RsaKeyParameters
 		: AsymmetricKeyParameter

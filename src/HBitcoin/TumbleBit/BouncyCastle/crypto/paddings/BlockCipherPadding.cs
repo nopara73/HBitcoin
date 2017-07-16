@@ -1,4 +1,4 @@
-namespace NTumbleBit.BouncyCastle.Crypto.Paddings
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Paddings
 {
 	/**
      * Block cipher padders are expected to conform to this interface

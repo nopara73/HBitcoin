@@ -2,7 +2,7 @@
 using NBitcoin;
 using System.Threading;
 
-namespace NTumbleBit.Services
+namespace HBitcoin.TumbleBit.Services
 {
 	public class TransactionInformation
 	{

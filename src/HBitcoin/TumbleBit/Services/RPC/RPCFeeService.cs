@@ -2,7 +2,7 @@
 using NBitcoin;
 using NBitcoin.RPC;
 
-namespace NTumbleBit.Services.RPC
+namespace HBitcoin.TumbleBit.Services.RPC
 {
 	public class RPCFeeService : IFeeService
 	{

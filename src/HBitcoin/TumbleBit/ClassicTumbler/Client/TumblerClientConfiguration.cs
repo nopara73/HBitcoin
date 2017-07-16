@@ -3,10 +3,10 @@ using System.Text;
 using System.Linq;
 using System.IO;
 using NBitcoin;
-using NTumbleBit.Configuration;
+using HBitcoin.TumbleBit.Configuration;
 using System.Diagnostics;
 
-namespace NTumbleBit.ClassicTumbler.Client
+namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 {
 	public class OutputWalletConfiguration
 	{

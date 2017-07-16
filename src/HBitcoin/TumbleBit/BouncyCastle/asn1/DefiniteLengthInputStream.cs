@@ -1,9 +1,9 @@
 using System;
 using System.IO;
 
-using NTumbleBit.BouncyCastle.Utilities.IO;
+using HBitcoin.TumbleBit.BouncyCastle.Utilities.IO;
 
-namespace NTumbleBit.BouncyCastle.Asn1
+namespace HBitcoin.TumbleBit.BouncyCastle.Asn1
 {
 	internal class DefiniteLengthInputStream
 		: LimitedInputStream

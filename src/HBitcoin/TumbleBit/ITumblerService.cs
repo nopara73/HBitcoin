@@ -1,6 +1,6 @@
 ﻿using System.Threading.Tasks;
 
-namespace NTumbleBit
+namespace HBitcoin.TumbleBit
 {
 	public interface ITumblerService
 	{

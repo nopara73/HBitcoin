@@ -3,10 +3,10 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 
-using NTumbleBit.BouncyCastle.Security;
-using NTumbleBit.BouncyCastle.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Security;
+using HBitcoin.TumbleBit.BouncyCastle.Utilities;
 
-namespace NTumbleBit.BouncyCastle.Math
+namespace HBitcoin.TumbleBit.BouncyCastle.Math
 {
 	internal class BigInteger
 	{

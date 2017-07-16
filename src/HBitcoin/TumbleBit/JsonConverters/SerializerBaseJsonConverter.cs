@@ -1,13 +1,13 @@
 ﻿using NBitcoin.DataEncoders;
 using NBitcoin.JsonConverters;
 using Newtonsoft.Json;
-using NTumbleBit.PuzzlePromise;
-using NTumbleBit.PuzzleSolver;
+using HBitcoin.TumbleBit.PuzzlePromise;
+using HBitcoin.TumbleBit.PuzzleSolver;
 using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace NTumbleBit.JsonConverters
+namespace HBitcoin.TumbleBit.JsonConverters
 {
 	public class SerializerBaseJsonConverter : JsonConverter
 	{

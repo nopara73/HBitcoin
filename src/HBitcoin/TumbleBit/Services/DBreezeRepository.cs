@@ -5,7 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Text;
 
-namespace NTumbleBit.Services
+namespace HBitcoin.TumbleBit.Services
 {
 	public class DBreezeRepository : IRepository, IDisposable
 	{

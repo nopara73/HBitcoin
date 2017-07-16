@@ -1,4 +1,4 @@
-﻿namespace NTumbleBit.BouncyCastle.Math.Field
+﻿namespace HBitcoin.TumbleBit.BouncyCastle.Math.Field
 {
 	internal interface IExtensionField
 		: IFiniteField

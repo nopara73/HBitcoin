@@ -2,10 +2,10 @@ using System;
 using System.IO;
 using System.Text;
 
-using NTumbleBit.BouncyCastle.Math;
-using NTumbleBit.BouncyCastle.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Math;
+using HBitcoin.TumbleBit.BouncyCastle.Utilities;
 
-namespace NTumbleBit.BouncyCastle.Asn1
+namespace HBitcoin.TumbleBit.BouncyCastle.Asn1
 {
 	internal class DerObjectIdentifier
 		: Asn1Object

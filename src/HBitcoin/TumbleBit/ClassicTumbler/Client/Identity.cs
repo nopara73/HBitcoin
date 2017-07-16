@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NTumbleBit.ClassicTumbler.Client
+namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 {
 	public class Identity : IEquatable<Identity>
 	{

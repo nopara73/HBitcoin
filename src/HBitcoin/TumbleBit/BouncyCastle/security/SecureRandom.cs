@@ -1,7 +1,7 @@
 ﻿using NBitcoin;
 using System;
 
-namespace NTumbleBit.BouncyCastle.Security
+namespace HBitcoin.TumbleBit.BouncyCastle.Security
 {
 	internal class SecureRandom : Random
 	{

@@ -1,10 +1,10 @@
-﻿using NTumbleBit.BouncyCastle.Math;
+﻿using HBitcoin.TumbleBit.BouncyCastle.Math;
 using System;
 using System.IO;
-using NTumbleBit.PuzzlePromise;
-using NTumbleBit.PuzzleSolver;
+using HBitcoin.TumbleBit.PuzzlePromise;
+using HBitcoin.TumbleBit.PuzzleSolver;
 
-namespace NTumbleBit
+namespace HBitcoin.TumbleBit
 {
 	internal class SerializerBase
 	{

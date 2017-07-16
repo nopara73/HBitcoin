@@ -1,6 +1,6 @@
 ﻿using NBitcoin;
 
-namespace NTumbleBit.ClassicTumbler.Models
+namespace HBitcoin.TumbleBit.ClassicTumbler.Models
 {
 	public class TumblerEscrowKeyResponse
 	{

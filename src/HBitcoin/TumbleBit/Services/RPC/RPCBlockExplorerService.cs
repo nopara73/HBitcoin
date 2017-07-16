@@ -8,7 +8,7 @@ using Newtonsoft.Json.Linq;
 using NBitcoin.DataEncoders;
 using System.Threading;
 
-namespace NTumbleBit.Services.RPC
+namespace HBitcoin.TumbleBit.Services.RPC
 {
 	public class RPCBlockExplorerService : IBlockExplorerService
 	{

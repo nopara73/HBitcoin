@@ -1,11 +1,11 @@
 using System;
 
-using NTumbleBit.BouncyCastle.Crypto.Parameters;
-using NTumbleBit.BouncyCastle.Math;
-using NTumbleBit.BouncyCastle.Security;
-using NTumbleBit.BouncyCastle.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Parameters;
+using HBitcoin.TumbleBit.BouncyCastle.Math;
+using HBitcoin.TumbleBit.BouncyCastle.Security;
+using HBitcoin.TumbleBit.BouncyCastle.Utilities;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Engines
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Engines
 {
 
     /**

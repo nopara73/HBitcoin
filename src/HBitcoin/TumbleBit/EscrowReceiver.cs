@@ -1,7 +1,7 @@
 ﻿using NBitcoin;
 using System;
 
-namespace NTumbleBit
+namespace HBitcoin.TumbleBit
 {
 	public abstract class EscrowReceiver : IEscrow
     {

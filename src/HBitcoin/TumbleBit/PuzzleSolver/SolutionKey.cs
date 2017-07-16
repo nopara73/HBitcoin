@@ -3,7 +3,7 @@ using NBitcoin.Crypto;
 using System;
 using System.Linq;
 
-namespace NTumbleBit.PuzzleSolver
+namespace HBitcoin.TumbleBit.PuzzleSolver
 {
 	public class SolutionKey
 	{

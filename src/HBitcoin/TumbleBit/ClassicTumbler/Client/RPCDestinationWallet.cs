@@ -4,7 +4,7 @@ using NBitcoin;
 using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 
-namespace NTumbleBit.ClassicTumbler.Client
+namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 {
 	public class RPCDestinationWallet : IDestinationWallet
     {

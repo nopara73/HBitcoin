@@ -1,9 +1,9 @@
 ﻿using System;
 
-using NTumbleBit.BouncyCastle.Math;
-using NTumbleBit.BouncyCastle.Security;
+using HBitcoin.TumbleBit.BouncyCastle.Math;
+using HBitcoin.TumbleBit.BouncyCastle.Security;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Signers
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Signers
 {
 	internal class RandomDsaKCalculator
 		: IDsaKCalculator

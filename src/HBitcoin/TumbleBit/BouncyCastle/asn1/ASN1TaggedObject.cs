@@ -1,8 +1,8 @@
 ﻿using System;
 
-using NTumbleBit.BouncyCastle.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Utilities;
 
-namespace NTumbleBit.BouncyCastle.Asn1
+namespace HBitcoin.TumbleBit.BouncyCastle.Asn1
 {
 	/**
      * ASN.1 TaggedObject - in ASN.1 notation this is any object preceded by

@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
-namespace NTumbleBit.Services.RPC
+namespace HBitcoin.TumbleBit.Services.RPC
 {
 	public class RPCWalletEntry
 	{

@@ -1,7 +1,7 @@
 ﻿using NBitcoin;
-using NTumbleBit.BouncyCastle.Crypto.Engines;
-using NTumbleBit.BouncyCastle.Crypto.Parameters;
-using NTumbleBit.BouncyCastle.Math;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Engines;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Parameters;
+using HBitcoin.TumbleBit.BouncyCastle.Math;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -10,7 +10,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace NTumbleBit
+namespace HBitcoin.TumbleBit
 {
 	public static class Utils
 	{

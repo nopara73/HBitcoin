@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NTumbleBit.BouncyCastle.Math.Field
+namespace HBitcoin.TumbleBit.BouncyCastle.Math.Field
 {
 	internal class GenericPolynomialExtensionField
 		: IPolynomialExtensionField

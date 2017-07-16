@@ -1,9 +1,9 @@
 ﻿using NBitcoin;
-using NTumbleBit.PuzzleSolver;
+using HBitcoin.TumbleBit.PuzzleSolver;
 using System;
-using NTumbleBit.ClassicTumbler;
+using HBitcoin.TumbleBit.ClassicTumbler;
 
-namespace NTumbleBit
+namespace HBitcoin.TumbleBit
 {
 	public interface IEscrow
 	{

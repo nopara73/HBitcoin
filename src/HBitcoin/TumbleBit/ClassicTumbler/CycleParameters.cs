@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace NTumbleBit.ClassicTumbler
+namespace HBitcoin.TumbleBit.ClassicTumbler
 {
 	public enum CyclePhase : int
 	{

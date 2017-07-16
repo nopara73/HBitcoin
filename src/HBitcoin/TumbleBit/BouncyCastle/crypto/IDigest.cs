@@ -1,4 +1,4 @@
-namespace NTumbleBit.BouncyCastle.Crypto
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto
 {
 	/**
      * interface that a message digest conforms to.

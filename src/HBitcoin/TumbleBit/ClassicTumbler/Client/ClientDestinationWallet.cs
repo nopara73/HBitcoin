@@ -1,12 +1,12 @@
 ﻿using NBitcoin;
 using NBitcoin.Crypto;
 using NBitcoin.DataEncoders;
-using NTumbleBit.Services;
+using HBitcoin.TumbleBit.Services;
 using System;
 using System.Diagnostics;
 using System.Text;
 
-namespace NTumbleBit.ClassicTumbler.Client
+namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 {
 	public interface IDestinationWallet
 	{

@@ -1,4 +1,4 @@
-namespace NTumbleBit.BouncyCastle.Asn1.Sec
+namespace HBitcoin.TumbleBit.BouncyCastle.Asn1.Sec
 {
 	internal abstract class SecObjectIdentifiers
 	{

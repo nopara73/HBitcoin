@@ -1,8 +1,8 @@
 using System;
 
-using NTumbleBit.BouncyCastle.Security;
+using HBitcoin.TumbleBit.BouncyCastle.Security;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Parameters
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Parameters
 {
     internal class ParametersWithRandom
 		: ICipherParameters

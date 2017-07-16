@@ -1,10 +1,10 @@
 ﻿using NBitcoin;
-using NTumbleBit.BouncyCastle.Crypto.Digests;
-using NTumbleBit.BouncyCastle.Crypto.Parameters;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Digests;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Parameters;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace NTumbleBit.PuzzlePromise
+namespace HBitcoin.TumbleBit.PuzzlePromise
 {
 	internal static class PromiseUtils
 	{

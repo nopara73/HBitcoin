@@ -1,7 +1,7 @@
 ﻿
-using NTumbleBit.BouncyCastle.Asn1.X509;
+using HBitcoin.TumbleBit.BouncyCastle.Asn1.X509;
 
-namespace NTumbleBit.BouncyCastle.Asn1.Pkcs
+namespace HBitcoin.TumbleBit.BouncyCastle.Asn1.Pkcs
 {
 	internal class PrivateKeyInfo
 		: Asn1Encodable

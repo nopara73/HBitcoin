@@ -1,6 +1,6 @@
 ﻿using NBitcoin;
 
-namespace NTumbleBit.PuzzleSolver
+namespace HBitcoin.TumbleBit.PuzzleSolver
 {
 	public class ServerCommitment
 	{

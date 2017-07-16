@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Collections;
 #endif
 
-namespace NTumbleBit.BouncyCastle.Utilities
+namespace HBitcoin.TumbleBit.BouncyCastle.Utilities
 {
 	internal abstract class Platform
 	{

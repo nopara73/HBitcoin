@@ -1,6 +1,6 @@
-﻿using NTumbleBit.BouncyCastle.Utilities;
+﻿using HBitcoin.TumbleBit.BouncyCastle.Utilities;
 
-namespace NTumbleBit.BouncyCastle.Math.Field
+namespace HBitcoin.TumbleBit.BouncyCastle.Math.Field
 {
 	internal class GF2Polynomial
 		: IPolynomial

@@ -1,4 +1,4 @@
-namespace NTumbleBit.BouncyCastle.Crypto
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto
 {
 	/**
      * all parameter classes implement this.

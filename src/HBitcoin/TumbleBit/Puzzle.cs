@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NTumbleBit
+namespace HBitcoin.TumbleBit
 {
 	public class Puzzle
 	{

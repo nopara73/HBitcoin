@@ -1,9 +1,9 @@
 using System;
 using System.IO;
 
-using NTumbleBit.BouncyCastle.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Utilities;
 
-namespace NTumbleBit.BouncyCastle.Asn1
+namespace HBitcoin.TumbleBit.BouncyCastle.Asn1
 {
 	internal abstract class Asn1OctetString
 		: Asn1Object, Asn1OctetStringParser

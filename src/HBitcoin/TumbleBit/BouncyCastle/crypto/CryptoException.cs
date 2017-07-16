@@ -1,6 +1,6 @@
 using System;
 
-namespace NTumbleBit.BouncyCastle.Crypto
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto
 {
 	internal class CryptoException
 		: Exception

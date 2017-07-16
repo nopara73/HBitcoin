@@ -1,4 +1,4 @@
-namespace NTumbleBit.BouncyCastle.Crypto.Utilities
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Utilities
 {
 	internal sealed class Pack
 	{

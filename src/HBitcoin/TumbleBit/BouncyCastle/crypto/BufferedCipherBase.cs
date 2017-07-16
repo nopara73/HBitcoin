@@ -1,4 +1,4 @@
-namespace NTumbleBit.BouncyCastle.Crypto
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto
 {
 	internal abstract class BufferedCipherBase
 		: IBufferedCipher

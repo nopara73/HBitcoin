@@ -1,9 +1,9 @@
 using System;
 using System.Text;
 
-using NTumbleBit.BouncyCastle.Math;
+using HBitcoin.TumbleBit.BouncyCastle.Math;
 
-namespace NTumbleBit.BouncyCastle.Utilities
+namespace HBitcoin.TumbleBit.BouncyCastle.Utilities
 {
 	/// <summary> General array utilities.</summary>
 	internal abstract class Arrays

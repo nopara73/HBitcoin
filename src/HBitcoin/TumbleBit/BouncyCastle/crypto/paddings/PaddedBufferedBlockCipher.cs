@@ -1,6 +1,6 @@
 using System;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Paddings
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Paddings
 {
 	/**
 	* A wrapper class that allows block ciphers to be used to process data in

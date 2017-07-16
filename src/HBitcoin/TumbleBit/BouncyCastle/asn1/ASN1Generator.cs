@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace NTumbleBit.BouncyCastle.Asn1
+namespace HBitcoin.TumbleBit.BouncyCastle.Asn1
 {
 	internal abstract class Asn1Generator
 	{

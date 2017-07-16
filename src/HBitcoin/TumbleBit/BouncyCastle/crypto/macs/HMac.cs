@@ -1,9 +1,9 @@
 using System;
 
-using NTumbleBit.BouncyCastle.Crypto.Parameters;
-using NTumbleBit.BouncyCastle.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Parameters;
+using HBitcoin.TumbleBit.BouncyCastle.Utilities;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Macs
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Macs
 {
 	/**
     * HMAC implementation based on RFC2104

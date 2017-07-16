@@ -1,9 +1,9 @@
 ﻿using System;
 //using Org.BouncyCastle.Math;
 //using Org.BouncyCastle.Security;
-using NTumbleBit.BouncyCastle.Crypto.Parameters;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Parameters;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Generators
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Generators
 {
 	/**
     * Generator for MGF1 as defined in Pkcs 1v2

@@ -1,4 +1,4 @@
-﻿namespace NTumbleBit.BouncyCastle.Asn1.X509
+﻿namespace HBitcoin.TumbleBit.BouncyCastle.Asn1.X509
 {
 	internal class AlgorithmIdentifier
 		: Asn1Encodable

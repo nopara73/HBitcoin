@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace NTumbleBit.BouncyCastle.Utilities.IO
+namespace HBitcoin.TumbleBit.BouncyCastle.Utilities.IO
 {
 	internal class FilterStream : Stream
 	{

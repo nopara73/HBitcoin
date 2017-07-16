@@ -1,4 +1,4 @@
-﻿namespace NTumbleBit.PuzzleSolver
+﻿namespace HBitcoin.TumbleBit.PuzzleSolver
 {
 	public class SolverClientRevelation
 	{

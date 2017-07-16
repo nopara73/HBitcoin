@@ -1,15 +1,15 @@
 ﻿using NBitcoin;
 using NBitcoin.Crypto;
-using NTumbleBit.BouncyCastle.Asn1.Pkcs;
-using NTumbleBit.BouncyCastle.Asn1.X509;
-using NTumbleBit.BouncyCastle.Crypto.Digests;
-using NTumbleBit.BouncyCastle.Crypto.Engines;
-using NTumbleBit.BouncyCastle.Crypto.Generators;
-using NTumbleBit.BouncyCastle.Crypto.Parameters;
-using NTumbleBit.BouncyCastle.Math;
+using HBitcoin.TumbleBit.BouncyCastle.Asn1.Pkcs;
+using HBitcoin.TumbleBit.BouncyCastle.Asn1.X509;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Digests;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Engines;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Generators;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Parameters;
+using HBitcoin.TumbleBit.BouncyCastle.Math;
 using System;
 
-namespace NTumbleBit
+namespace HBitcoin.TumbleBit
 {
 	public class RsaPubKey
 	{

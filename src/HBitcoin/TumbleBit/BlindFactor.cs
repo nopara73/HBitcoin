@@ -1,7 +1,7 @@
-﻿using NTumbleBit.BouncyCastle.Math;
+﻿using HBitcoin.TumbleBit.BouncyCastle.Math;
 using System;
 
-namespace NTumbleBit
+namespace HBitcoin.TumbleBit
 {
 	public class BlindFactor
 	{

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 
-namespace NTumbleBit.BouncyCastle.Asn1
+namespace HBitcoin.TumbleBit.BouncyCastle.Asn1
 {
 	internal class Asn1OutputStream
 		: DerOutputStream

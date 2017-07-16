@@ -6,7 +6,7 @@ using System.IO;
 using System.Reflection;
 
 
-namespace NTumbleBit.JsonConverters
+namespace HBitcoin.TumbleBit.JsonConverters
 {
 	public class RsaKeyJsonConverter : JsonConverter
 	{

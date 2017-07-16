@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace NTumbleBit.PuzzleSolver
+namespace HBitcoin.TumbleBit.PuzzleSolver
 {
 	public class SolverParameters
 	{

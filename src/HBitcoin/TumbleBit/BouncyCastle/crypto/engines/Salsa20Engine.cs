@@ -1,10 +1,10 @@
 ﻿using System;
 
-using NTumbleBit.BouncyCastle.Crypto.Parameters;
-using NTumbleBit.BouncyCastle.Crypto.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Parameters;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Utilities;
 using NBitcoin.DataEncoders;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Engines
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Engines
 {
 	/// <summary>
 	/// Implementation of Daniel J. Bernstein's Salsa20 stream cipher, Snuffle 2005

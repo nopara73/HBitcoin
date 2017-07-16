@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace NTumbleBit
+namespace HBitcoin.TumbleBit
 {
 	//<Bob.PubKey>
 	//OP_DEPTH OP_3 OP_EQUAL

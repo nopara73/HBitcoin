@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace NTumbleBit.BouncyCastle.Utilities.IO
+namespace HBitcoin.TumbleBit.BouncyCastle.Utilities.IO
 {
 	internal abstract class BaseInputStream : Stream
 	{

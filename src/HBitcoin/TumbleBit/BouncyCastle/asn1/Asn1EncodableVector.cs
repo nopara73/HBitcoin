@@ -1,9 +1,9 @@
 using System;
 using System.Collections;
 
-using NTumbleBit.BouncyCastle.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Utilities;
 
-namespace NTumbleBit.BouncyCastle.Asn1
+namespace HBitcoin.TumbleBit.BouncyCastle.Asn1
 {
 	internal class Asn1EncodableVector
 		: IEnumerable

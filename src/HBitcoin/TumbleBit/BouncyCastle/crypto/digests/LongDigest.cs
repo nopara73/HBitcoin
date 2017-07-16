@@ -1,9 +1,9 @@
 using System;
 
-using NTumbleBit.BouncyCastle.Crypto.Utilities;
-using NTumbleBit.BouncyCastle.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Crypto.Utilities;
+using HBitcoin.TumbleBit.BouncyCastle.Utilities;
 
-namespace NTumbleBit.BouncyCastle.Crypto.Digests
+namespace HBitcoin.TumbleBit.BouncyCastle.Crypto.Digests
 {
 	/**
     * Base class for SHA-384 and SHA-512.

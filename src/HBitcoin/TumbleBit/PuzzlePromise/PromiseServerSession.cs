@@ -1,12 +1,12 @@
 ﻿using NBitcoin;
 using NBitcoin.Crypto;
-using NTumbleBit.PuzzleSolver;
+using HBitcoin.TumbleBit.PuzzleSolver;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using NTumbleBit.ClassicTumbler;
+using HBitcoin.TumbleBit.ClassicTumbler;
 
-namespace NTumbleBit.PuzzlePromise
+namespace HBitcoin.TumbleBit.PuzzlePromise
 {
 	public enum PromiseServerStates
 	{

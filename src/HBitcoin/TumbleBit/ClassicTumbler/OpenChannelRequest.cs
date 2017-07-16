@@ -1,6 +1,6 @@
 ﻿using NBitcoin;
 
-namespace NTumbleBit.ClassicTumbler
+namespace HBitcoin.TumbleBit.ClassicTumbler
 {
 	public class OpenChannelRequest
     {
