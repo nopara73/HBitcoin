@@ -15,11 +15,7 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 			Runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
 		}
 
-
-		public TumblerClientRuntime Runtime
-		{
-			get; set;
-		}
+		public TumblerClientRuntime Runtime { get; set; }
 
 		public override string Name => "mixer";
 

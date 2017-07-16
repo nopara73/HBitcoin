@@ -15,14 +15,16 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 {
 	public class TumblerClient
 	{
-		public TumblerClient(Network network, Uri serverAddress, Identity identity)
+		public TumblerClient(Network network, Uri serverAddress, Identity identity, TumblerClientRuntime runtime)
 		{
 			_Address = serverAddress ?? throw new ArgumentNullException(nameof(serverAddress));
 			_Network = network ?? throw new ArgumentNullException(nameof(network));
 			_identity = identity;
+			_runtime = runtime;
 			ClassicTumblerParameters.ExtractHashFromUrl(serverAddress); //Validate
 		}
 
+		private TumblerClientRuntime _runtime;
 		private Identity _identity;
 
 		private readonly Network _Network;
@@ -73,31 +75,28 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 				message.Content = new StringContent(Serializer.ToString(body, Network), Encoding.UTF8, "application/json");
 			}
 
-			if (Tor.UseTor)
+			// torchangelog.txt for testing only, before merge to master it should be deleted
+			if (_identity == new Identity(Role.Alice, -1))
 			{
-				// torchangelog.txt for testing only, before merge to master it should be deleted
-				if (_identity == new Identity(Role.Alice, -1))
-				{
-					File.AppendAllText("torchangelog.txt", Environment.NewLine + Environment.NewLine + "//RESTART" + Environment.NewLine);
-				}
-
-				if (_identity != LastUsedIdentity)
-				{
-					var start = DateTime.Now;
-					Debug.WriteLine($"Changing identity to {_identity}");
-					await Tor.ControlPortClient.ChangeCircuitAsync(ctsToken).ConfigureAwait(false);
-					var takelong = DateTime.Now - start;
-					File.AppendAllText("torchangelog.txt", Environment.NewLine + Environment.NewLine + $"CHANGE IP: {(int)takelong.TotalSeconds} sec" + Environment.NewLine);
-				}
-				LastUsedIdentity = _identity;
-				File.AppendAllText("torchangelog.txt", '\t' + _identity.ToString() + Environment.NewLine);
-				File.AppendAllText("torchangelog.txt", '\t' + message.Method.Method + " " + message.RequestUri.AbsolutePath + Environment.NewLine);
+				File.AppendAllText("torchangelog.txt", Environment.NewLine + Environment.NewLine + "//RESTART" + Environment.NewLine);
 			}
+
+			if (_identity != LastUsedIdentity)
+			{
+				var start = DateTime.Now;
+				Debug.WriteLine($"Changing identity to {_identity}");
+				await _runtime.ControlPortClient.ChangeCircuitAsync(ctsToken).ConfigureAwait(false);
+				var takelong = DateTime.Now - start;
+				File.AppendAllText("torchangelog.txt", Environment.NewLine + Environment.NewLine + $"CHANGE IP: {(int)takelong.TotalSeconds} sec" + Environment.NewLine);
+			}
+			LastUsedIdentity = _identity;
+			File.AppendAllText("torchangelog.txt", '\t' + _identity.ToString() + Environment.NewLine);
+			File.AppendAllText("torchangelog.txt", '\t' + message.Method.Method + " " + message.RequestUri.AbsolutePath + Environment.NewLine);
 
 			HttpResponseMessage result;
 			try
 			{
-				result = await Tor.HttpClient.SendAsync(message, ctsToken).ConfigureAwait(false);
+				result = await _runtime.TorHttpClient.SendAsync(message, ctsToken).ConfigureAwait(false);
 			}
 			catch (Exception ex)
 			{

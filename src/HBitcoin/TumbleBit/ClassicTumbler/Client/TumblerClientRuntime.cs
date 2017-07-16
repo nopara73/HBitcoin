@@ -8,6 +8,8 @@ using HBitcoin.TumbleBit.Services;
 using HBitcoin.TumbleBit.Configuration;
 using System.Threading;
 using System.Diagnostics;
+using DotNetTor;
+using System.Net.Http;
 
 namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 {
@@ -21,12 +23,14 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 
 	public class TumblerClientRuntime : IDisposable
 	{
-		public static async Task<TumblerClientRuntime> FromConfigurationAsync(TumblerClientConfiguration configuration, CancellationToken ctsToken)
+		public HttpClient TorHttpClient { get; set; }
+		public DotNetTor.ControlPort.Client ControlPortClient { get; set; }
+		public static async Task<TumblerClientRuntime> FromConfigurationAsync(TumblerClientConfiguration configuration, HttpClient torHttpClient, DotNetTor.ControlPort.Client controlPortClient, CancellationToken ctsToken)
 		{
 			var runtime = new TumblerClientRuntime();
 			try
 			{
-				await runtime.ConfigureAsync(configuration, ctsToken).ConfigureAwait(false);
+				await runtime.ConfigureAsync(configuration, torHttpClient, controlPortClient, ctsToken).ConfigureAwait(false);
 			}
 			catch
 			{
@@ -35,20 +39,15 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 			}
 			return runtime;
 		}
-		public async Task ConfigureAsync(TumblerClientConfiguration configuration, CancellationToken ctsToken)
+		public async Task ConfigureAsync(TumblerClientConfiguration configuration, HttpClient torHttpClient, DotNetTor.ControlPort.Client controlPortClient, CancellationToken ctsToken)
 		{
+			TorHttpClient = torHttpClient;
+			ControlPortClient = controlPortClient;
+
 			Network = configuration.Network;
 			TumblerServer = configuration.TumblerServer;
 
-			RPCClient rpc = null;
-			try
-			{
-				rpc = configuration.RPCArgs.ConfigureRPCClient(configuration.Network);
-			}
-			catch
-			{
-				throw new ConfigException("Please, fix rpc settings in " + configuration.ConfigurationFile);
-			}
+			RPCClient rpc = configuration.RPCArgs.ConfigureRPCClient(configuration.Network);
 
 			var dbreeze = new DBreezeRepository(Path.Combine(configuration.DataDir, "db2"));
 			Cooperative = configuration.Cooperative;
@@ -57,21 +56,7 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 			Tracker = new Tracker(dbreeze, Network);
 			Services = ExternalServices.CreateFromRPCClient(rpc, dbreeze, Tracker);
 
-			if(configuration.OutputWallet.RootKey != null && configuration.OutputWallet.KeyPath != null)
-				DestinationWallet = new ClientDestinationWallet(configuration.OutputWallet.RootKey, configuration.OutputWallet.KeyPath, dbreeze, configuration.Network);
-			else if(configuration.OutputWallet.RPCArgs != null)
-			{
-				try
-				{
-					DestinationWallet = new RPCDestinationWallet(configuration.OutputWallet.RPCArgs.ConfigureRPCClient(Network));
-				}
-				catch
-				{
-					throw new ConfigException("Please, fix outputwallet rpc settings in " + configuration.ConfigurationFile);
-				}
-			}
-			else
-				throw new ConfigException("Missing configuration for outputwallet");
+			DestinationWallet = new ClientDestinationWallet(configuration.OutputWallet.RootKey, configuration.OutputWallet.KeyPath, dbreeze, configuration.Network);
 
 			TumblerParameters = dbreeze.Get<ClassicTumblerParameters>("Configuration", configuration.TumblerServer.AbsoluteUri);
 			var parameterHash = ClassicTumblerParameters.ExtractHashFromUrl(configuration.TumblerServer);
@@ -79,34 +64,31 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 			if(TumblerParameters != null && TumblerParameters.GetHash() != parameterHash)
 				TumblerParameters = null;
 
-			if(!configuration.OnlyMonitor)
+			var client = CreateTumblerClient(new Identity(Role.Alice, -1));
+			if (TumblerParameters == null)
 			{
-				var client = CreateTumblerClient(new Identity(Role.Alice, -1));
-				if(TumblerParameters == null)
+				Debug.WriteLine("Downloading tumbler information of " + configuration.TumblerServer.AbsoluteUri);
+				var parameters = await Retry(3, async ()
+					=> await client.GetTumblerParametersAsync(ctsToken).ConfigureAwait(false)).ConfigureAwait(false);
+				if (parameters == null)
+					throw new HttpRequestException("Unable to download tumbler's parameters");
+
+				if (parameters.GetHash() != parameterHash)
+					throw new ArgumentException("The tumbler returned an invalid configuration");
+
+				var standardCycles = new StandardCycles(configuration.Network);
+				var standardCycle = standardCycles.GetStandardCycle(parameters);
+
+				if (standardCycle == null || !parameters.IsStandard())
 				{
-					Debug.WriteLine("Downloading tumbler information of " + configuration.TumblerServer.AbsoluteUri);
-					var parameters = await Retry(3, async () 
-						=> await client.GetTumblerParametersAsync(ctsToken).ConfigureAwait(false)).ConfigureAwait(false);
-					if(parameters == null)
-						throw new ConfigException("Unable to download tumbler's parameters");
-
-					if(parameters.GetHash() != parameterHash)
-						throw new ConfigException("The tumbler returned an invalid configuration");
-
-					var standardCycles = new StandardCycles(configuration.Network);
-					var standardCycle = standardCycles.GetStandardCycle(parameters);
-
-					if(standardCycle == null || !parameters.IsStandard())
-					{
-						Debug.WriteLine("WARNING: This tumbler has non standard parameters");
-						standardCycle = null;
-					}
-
-					Repository.UpdateOrInsert("Configuration", TumblerServer.AbsoluteUri, parameters, (o, n) => n);
-					TumblerParameters = parameters;
-
-					Debug.WriteLine("Tumbler parameters saved");
+					Debug.WriteLine("WARNING: This tumbler has non standard parameters");
+					standardCycle = null;
 				}
+
+				Repository.UpdateOrInsert("Configuration", TumblerServer.AbsoluteUri, parameters, (o, n) => n);
+				TumblerParameters = parameters;
+
+				Debug.WriteLine("Tumbler parameters saved");
 
 				Debug.WriteLine($"Using tumbler {TumblerServer.AbsoluteUri}");
 			}
@@ -120,7 +102,7 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 
 		public TumblerClient CreateTumblerClient(Identity identity)
 		{
-			var client = new TumblerClient(Network, TumblerServer, identity);
+			var client = new TumblerClient(Network, TumblerServer, identity, this);
 			return client;
 		}
 

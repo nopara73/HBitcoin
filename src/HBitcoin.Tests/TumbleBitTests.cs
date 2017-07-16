@@ -36,7 +36,7 @@ namespace HBitcoin.Tests
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
-			WalletJob walletJob = new WalletJob(Helpers.SocksPortHandler, Helpers.ControlPortClient, safe);
+			WalletJob walletJob = new WalletJob(Helpers.SocksPortHandler, Helpers.ControlPortClient, safe, new Uri("http://t4cqwqlvswcyyagg.onion/api/v1/tumblers/310586435471416ca16058c1fb9ed3c868f239b9"));
 			
 			// start syncing
 			var cts = new CancellationTokenSource();
@@ -44,7 +44,7 @@ namespace HBitcoin.Tests
 
 			try
 			{
-				Debug.WriteLine(walletJob.GetTumblerInfoAsync(new Uri("http://t4cqwqlvswcyyagg.onion/api/v1/tumblers/310586435471416ca16058c1fb9ed3c868f239b9")).Result);
+				Assert.NotNull(walletJob.TumbleBitRuntime.TumblerParameters);
 			}
 			finally
 			{
