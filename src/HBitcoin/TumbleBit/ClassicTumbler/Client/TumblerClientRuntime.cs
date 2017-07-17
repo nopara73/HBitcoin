@@ -65,32 +65,37 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 				TumblerParameters = null;
 
 			var client = CreateTumblerClient(new Identity(Role.Alice, -1));
-			if (TumblerParameters == null)
+
+			Debug.WriteLine("Downloading tumbler information of " + configuration.TumblerServer.AbsoluteUri);
+			var parameters = await client.GetTumblerParametersAsync(ctsToken).ConfigureAwait(false);
+			if (parameters == null)
+				throw new HttpRequestException("Unable to download tumbler's parameters");
+
+			if (parameters.GetHash() != parameterHash)
+				throw new ArgumentException("The tumbler returned an invalid configuration");
+
+			var standardCycles = new StandardCycles(configuration.Network);
+			var standardCycle = standardCycles.GetStandardCycle(parameters);
+
+			if (standardCycle == null || !parameters.IsStandard())
 			{
-				Debug.WriteLine("Downloading tumbler information of " + configuration.TumblerServer.AbsoluteUri);
-				var parameters = await Retry(3, async ()
-					=> await client.GetTumblerParametersAsync(ctsToken).ConfigureAwait(false)).ConfigureAwait(false);
-				if (parameters == null)
-					throw new HttpRequestException("Unable to download tumbler's parameters");
+				Debug.WriteLine("WARNING: This tumbler has non standard parameters");
+				standardCycle = null;
+			}
 
-				if (parameters.GetHash() != parameterHash)
-					throw new ArgumentException("The tumbler returned an invalid configuration");
-
-				var standardCycles = new StandardCycles(configuration.Network);
-				var standardCycle = standardCycles.GetStandardCycle(parameters);
-
-				if (standardCycle == null || !parameters.IsStandard())
-				{
-					Debug.WriteLine("WARNING: This tumbler has non standard parameters");
-					standardCycle = null;
-				}
-
-				Repository.UpdateOrInsert("Configuration", TumblerServer.AbsoluteUri, parameters, (o, n) => n);
+			if(TumblerParameters == null)
+			{
 				TumblerParameters = parameters;
-
+				Repository.UpdateOrInsert("Configuration", TumblerServer.AbsoluteUri, parameters, (o, n) => n);
 				Debug.WriteLine("Tumbler parameters saved");
-
 				Debug.WriteLine($"Using tumbler {TumblerServer.AbsoluteUri}");
+			}
+			else
+			{
+				if(TumblerParameters.GetHash() != parameters.GetHash())
+				{
+					throw new NotSupportedException("The tumbler changed its parameters.");
+				}
 			}
 		}
 

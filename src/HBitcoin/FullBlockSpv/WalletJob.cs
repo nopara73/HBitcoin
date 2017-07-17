@@ -21,6 +21,7 @@ using QBitNinja.Client.Models;
 using DotNetTor.SocksPort;
 using HBitcoin.TumbleBit.ClassicTumbler.Client;
 using HBitcoin.TumbleBit.Services;
+using DotNetTor;
 
 namespace HBitcoin.FullBlockSpv
 {
@@ -1314,7 +1315,11 @@ namespace HBitcoin.FullBlockSpv
 				TumbleBitStateMachine = null;
 				TumbleBitBroadcaster = null;
 
-				if (ex is OperationCanceledException) return;
+				if (ex is OperationCanceledException
+					|| ex is TorException) // then the tumbler is probably offline
+				{
+					return;
+				}
 			}
 		}
 

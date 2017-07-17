@@ -44,6 +44,8 @@ namespace HBitcoin.Tests
 
 			try
 			{
+				Assert.True(walletJob.UseTumbleBit);
+				Assert.True(walletJob.TumbleBitSetupSuccessful);
 				Assert.NotNull(walletJob.TumbleBitRuntime.TumblerParameters);
 			}
 			finally
