@@ -17,23 +17,9 @@ namespace HBitcoin.TumbleBit.Services
 			BlockExplorerService = services.BlockExplorerService;
 		}
 
-		public IBroadcastService BroadcasterService
-		{
-			get;
-			private set;
-		}
-		public ITrustedBroadcastService TrustedBroadcasterService
-		{
-			get;
-			private set;
-		}
-
-		public IBlockExplorerService BlockExplorerService
-		{
-			get;
-			private set;
-		}
-
+		public IBroadcastService BroadcasterService { get; private set; }
+		public ITrustedBroadcastService TrustedBroadcasterService { get; private set; }
+		public IBlockExplorerService BlockExplorerService { get; private set; }
 		public override string Name => "broadcaster";
 
 		public Transaction[] TryBroadcast()

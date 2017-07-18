@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
-namespace HBitcoin.TumbleBit.Services.RPC
+namespace HBitcoin.TumbleBit.Services.HBitcoin
 {
 	public class RPCTrustedBroadcastService : ITrustedBroadcastService
 	{
@@ -54,7 +54,7 @@ namespace HBitcoin.TumbleBit.Services.RPC
 			}
 		}
 
-		public RPCTrustedBroadcastService(RPCClient rpc, IBroadcastService innerBroadcast, IBlockExplorerService explorer, IRepository repository, RPCWalletCache cache, Tracker tracker)
+		public RPCTrustedBroadcastService(RPCClient rpc, IBroadcastService innerBroadcast, IBlockExplorerService explorer, IRepository repository, HBitcoinWalletCache cache, Tracker tracker)
 		{
 			_Repository = repository ?? throw new ArgumentNullException(nameof(repository));
 			_RPCClient = rpc ?? throw new ArgumentNullException(nameof(rpc));
@@ -214,7 +214,7 @@ namespace HBitcoin.TumbleBit.Services.RPC
 		}
 
 		private readonly IBlockExplorerService _BlockExplorer;
-		private readonly RPCWalletCache _Cache;
+		private readonly HBitcoinWalletCache _Cache;
 
 		public IBlockExplorerService BlockExplorer => _BlockExplorer;
 

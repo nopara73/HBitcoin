@@ -4,7 +4,7 @@ using NBitcoin;
 using NBitcoin.RPC;
 using Newtonsoft.Json.Linq;
 
-namespace HBitcoin.TumbleBit.Services.RPC
+namespace HBitcoin.TumbleBit.Services.HBitcoin
 {
 	public class RPCWalletService : IWalletService
 	{

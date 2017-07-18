@@ -1,18 +1,16 @@
 ﻿using NBitcoin.RPC;
-using HBitcoin.TumbleBit.Services.RPC;
+using HBitcoin.TumbleBit.Services.HBitcoin;
+using HBitcoin.FullBlockSpv;
 
 namespace HBitcoin.TumbleBit.Services
 {
 	public class ExternalServices
     {
-		public static ExternalServices CreateFromRPCClient(RPCClient rpc, IRepository repository, Tracker tracker)
+		public static ExternalServices CreateFromRPCClient(RPCClient rpc, WalletJob walletJob, IRepository repository, Tracker tracker)
 		{
-			var info = rpc.SendCommand(RPCOperations.getinfo);
-			var minimumRate = new NBitcoin.FeeRate(NBitcoin.Money.Coins((decimal)(double)((Newtonsoft.Json.Linq.JValue)(info.Result["relayfee"])).Value * 2), 1000);
-
 			var service = new ExternalServices();
 
-			var cache = new RPCWalletCache(rpc, repository);
+			var cache = new HBitcoinWalletCache(walletJob, repository);
 			service.WalletService = new RPCWalletService(rpc);
 			service.BroadcastService = new RPCBroadcastService(rpc, cache, repository);
 			service.BlockExplorerService = new RPCBlockExplorerService(rpc, cache, repository);

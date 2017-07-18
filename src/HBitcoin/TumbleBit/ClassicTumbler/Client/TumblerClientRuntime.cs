@@ -53,7 +53,7 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 			Repository = dbreeze;
 			_Disposables.Add(dbreeze);
 			Tracker = new Services.Tracker(dbreeze, Network);
-			Services = ExternalServices.CreateFromRPCClient(rpc, dbreeze, Tracker);
+			Services = ExternalServices.CreateFromRPCClient(rpc, walletJob, dbreeze, Tracker);
 
 			TumblerParameters = dbreeze.Get<ClassicTumblerParameters>("Configuration", configuration.TumblerServer.AbsoluteUri);
 			var parameterHash = ClassicTumblerParameters.ExtractHashFromUrl(configuration.TumblerServer);

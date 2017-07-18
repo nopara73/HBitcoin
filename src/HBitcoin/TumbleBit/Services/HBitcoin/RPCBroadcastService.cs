@@ -5,23 +5,17 @@ using System.Linq;
 using NBitcoin;
 using System.Diagnostics;
 
-namespace HBitcoin.TumbleBit.Services.RPC
+namespace HBitcoin.TumbleBit.Services.HBitcoin
 {
 	public class RPCBroadcastService : IBroadcastService
 	{
 		public class Record
 		{
-			public int Expiration
-			{
-				get; set;
-			}
-			public Transaction Transaction
-			{
-				get; set;
-			}
+			public int Expiration { get; set; }
+			public Transaction Transaction { get; set; }
 		}
-		RPCWalletCache _Cache;
-		public RPCBroadcastService(RPCClient rpc, RPCWalletCache cache, IRepository repository)
+		HBitcoinWalletCache _Cache;
+		public RPCBroadcastService(RPCClient rpc, HBitcoinWalletCache cache, IRepository repository)
 		{
 			_RPCClient = rpc ?? throw new ArgumentNullException(nameof(rpc));
 			_Repository = repository ?? throw new ArgumentNullException(nameof(repository));

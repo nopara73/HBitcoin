@@ -1,4 +1,6 @@
-﻿using NBitcoin;
+﻿using HBitcoin.FullBlockSpv;
+using HBitcoin.Models;
+using NBitcoin;
 using NBitcoin.RPC;
 using Newtonsoft.Json.Linq;
 using System;
@@ -7,7 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
-namespace HBitcoin.TumbleBit.Services.RPC
+namespace HBitcoin.TumbleBit.Services.HBitcoin
 {
 	public class RPCWalletEntry
 	{
@@ -19,14 +21,14 @@ namespace HBitcoin.TumbleBit.Services.RPC
 	/// Workaround around slow Bitcoin Core RPC.
 	/// We are refreshing the list of received transaction once per block.
 	/// </summary>
-	public class RPCWalletCache
+	public class HBitcoinWalletCache
 	{
-		private readonly RPCClient _RPCClient;
-		private readonly IRepository _Repo;
-		public RPCWalletCache(RPCClient rpc, IRepository repository)
+		private readonly WalletJob _walletJob;
+		private readonly IRepository _repository;
+		public HBitcoinWalletCache(WalletJob walletJob, IRepository repository)
 		{
-			_RPCClient = rpc ?? throw new ArgumentNullException(nameof(rpc));
-			_Repo = repository ?? throw new ArgumentNullException(nameof(repository));
+			_walletJob = walletJob ?? throw new ArgumentNullException(nameof(walletJob));
+			_repository = repository ?? throw new ArgumentNullException(nameof(repository));
 		}
 
 		volatile uint256 _RefreshedAtBlock;
@@ -63,7 +65,7 @@ namespace HBitcoin.TumbleBit.Services.RPC
 
 		private void RefreshBlockCount()
 		{
-			Interlocked.Exchange(ref _BlockCount, _RPCClient.GetBlockCount());
+			Interlocked.Exchange(ref _BlockCount, _walletJob.BestHeight.Value);
 		}
 
 		public Transaction GetTransaction(uint256 txId)
@@ -86,18 +88,17 @@ namespace HBitcoin.TumbleBit.Services.RPC
 			try
 			{
 				//check in the wallet tx
-				var result = _RPCClient.SendCommandNoThrows("gettransaction", txId.ToString(), true);
-				if(result == null || result.Error != null)
+				SmartTransaction result = _walletJob.Tracker.TrackedTransactions.Where(x => x.GetHash() == txId).FirstOrDefault();
+				if (result == default(SmartTransaction))
 				{
-					//check in the txindex
-					result = _RPCClient.SendCommandNoThrows("getrawtransaction", txId.ToString(), 1);
-					if(result == null || result.Error != null)
-						return null;
+					return null;
 				}
-				var tx = new Transaction((string)result.Result["hex"]);
-				return tx;
+				return result.Transaction;
 			}
-			catch(RPCException) { return null; }
+			catch
+			{
+				return null;
+			}
 		}
 
 		public RPCWalletEntry[] GetEntries()
@@ -111,7 +112,7 @@ namespace HBitcoin.TumbleBit.Services.RPC
 		private void PutCached(Transaction tx)
 		{
 			tx.CacheHashes();
-			_Repo.UpdateOrInsert("CachedTransactions", tx.GetHash().ToString(), tx, (a, b) => b);
+			_repository.UpdateOrInsert("CachedTransactions", tx.GetHash().ToString(), tx, (a, b) => b);
 			lock(_TransactionsByTxId)
 			{
 				_TransactionsByTxId.TryAdd(tx.GetHash(), tx);
@@ -125,7 +126,7 @@ namespace HBitcoin.TumbleBit.Services.RPC
 			{
 				return tx;
 			}
-			var cached = _Repo.Get<Transaction>("CachedTransactions", txId.ToString());
+			var cached = _repository.Get<Transaction>("CachedTransactions", txId.ToString());
 			if(cached != null)
 				_TransactionsByTxId.TryAdd(txId, cached);
 			return cached;
@@ -139,38 +140,22 @@ namespace HBitcoin.TumbleBit.Services.RPC
 			var array = new List<RPCWalletEntry>();
 			knownTransactions = new HashSet<uint256>();
 			var removeFromCache = new HashSet<uint256>(_TransactionsByTxId.Values.Select(tx => tx.GetHash()));
-			var count = 100;
-			var skip = 0;
-			var highestConfirmation = 0;
-
-			while (true)
+			var bestHeight = _walletJob.BestHeight;
+			
+			foreach (var stx in _walletJob.Tracker.TrackedTransactions)
 			{
-				var result = _RPCClient.SendCommandNoThrows("listtransactions", "*", count, skip, true);
-				skip += count;
-				if(result.Error != null)
-					return null;
-				var transactions = (JArray)result.Result;
-				foreach(var obj in transactions)
+				var entry = new RPCWalletEntry
 				{
-					var entry = new RPCWalletEntry
-					{
-						Confirmations = obj["confirmations"] == null ? 0 : (int)obj["confirmations"],
-						TransactionId = new uint256((string)obj["txid"])
-					};
-					removeFromCache.Remove(entry.TransactionId);
-					if(knownTransactions.Add(entry.TransactionId))
-					{
-						array.Add(entry);
-					}
-					if(obj["confirmations"] != null)
-					{
-						highestConfirmation = Math.Max(highestConfirmation, (int)obj["confirmations"]);
-					}
+					Confirmations = stx.Height == Height.MemPool ? 0 : bestHeight.Value - stx.Height.Value + 1,
+					TransactionId = stx.GetHash()
+				};
+				removeFromCache.Remove(entry.TransactionId);
+				if (knownTransactions.Add(entry.TransactionId))
+				{
+					array.Add(entry);
 				}
-				if(transactions.Count < count || highestConfirmation >= 1400)
-					break;
 			}
-			foreach(var remove in removeFromCache)
+			foreach (var remove in removeFromCache)
 			{
 				_TransactionsByTxId.TryRemove(remove, out Transaction opt);
 			}

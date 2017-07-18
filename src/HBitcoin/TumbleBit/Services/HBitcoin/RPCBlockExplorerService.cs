@@ -8,12 +8,12 @@ using Newtonsoft.Json.Linq;
 using NBitcoin.DataEncoders;
 using System.Threading;
 
-namespace HBitcoin.TumbleBit.Services.RPC
+namespace HBitcoin.TumbleBit.Services.HBitcoin
 {
 	public class RPCBlockExplorerService : IBlockExplorerService
 	{
-		RPCWalletCache _Cache;
-		public RPCBlockExplorerService(RPCClient client, RPCWalletCache cache, IRepository repo)
+		HBitcoinWalletCache _Cache;
+		public RPCBlockExplorerService(RPCClient client, HBitcoinWalletCache cache, IRepository repo)
 		{
 			_RPCClient = client ?? throw new ArgumentNullException(nameof(client));
 			_Repo = repo ?? throw new ArgumentNullException(nameof(repo));

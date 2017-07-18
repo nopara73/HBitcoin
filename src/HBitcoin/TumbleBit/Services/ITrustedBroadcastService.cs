@@ -8,6 +8,5 @@ namespace HBitcoin.TumbleBit.Services
 		TrustedBroadcastRequest GetKnownTransaction(uint256 txId);
 		Transaction[] TryBroadcast(ref uint256[] knownBroadcasted);
 		Transaction[] TryBroadcast();
-
 	}
 }
