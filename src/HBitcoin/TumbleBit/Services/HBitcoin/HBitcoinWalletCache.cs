@@ -1,7 +1,6 @@
 ﻿using HBitcoin.FullBlockSpv;
 using HBitcoin.Models;
 using NBitcoin;
-using NBitcoin.RPC;
 using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Concurrent;
@@ -11,14 +10,13 @@ using System.Threading;
 
 namespace HBitcoin.TumbleBit.Services.HBitcoin
 {
-	public class RPCWalletEntry
+	public class HBitcoinWalletEntry
 	{
 		public uint256 TransactionId { get; set; }
 		public int Confirmations { get; set; }
 	}
 
 	/// <summary>
-	/// Workaround around slow Bitcoin Core RPC.
 	/// We are refreshing the list of received transaction once per block.
 	/// </summary>
 	public class HBitcoinWalletCache
@@ -101,7 +99,7 @@ namespace HBitcoin.TumbleBit.Services.HBitcoin
 			}
 		}
 
-		public RPCWalletEntry[] GetEntries()
+		public HBitcoinWalletEntry[] GetEntries()
 		{
 			lock(_Transactions)
 			{
@@ -133,20 +131,20 @@ namespace HBitcoin.TumbleBit.Services.HBitcoin
 		}
 
 
-		List<RPCWalletEntry> _Transactions = new List<RPCWalletEntry>();
+		List<HBitcoinWalletEntry> _Transactions = new List<HBitcoinWalletEntry>();
 		HashSet<uint256> _KnownTransactions = new HashSet<uint256>();
-		List<RPCWalletEntry> ListTransactions(ref HashSet<uint256> knownTransactions)
+		List<HBitcoinWalletEntry> ListTransactions(ref HashSet<uint256> knownTransactions)
 		{
-			var array = new List<RPCWalletEntry>();
+			var array = new List<HBitcoinWalletEntry>();
 			knownTransactions = new HashSet<uint256>();
 			var removeFromCache = new HashSet<uint256>(_TransactionsByTxId.Values.Select(tx => tx.GetHash()));
 			var bestHeight = _walletJob.BestHeight;
 			
-			foreach (var stx in _walletJob.Tracker.TrackedTransactions)
+			foreach (SmartTransaction stx in _walletJob.Tracker.TrackedTransactions)
 			{
-				var entry = new RPCWalletEntry
+				var entry = new HBitcoinWalletEntry
 				{
-					Confirmations = stx.Height == Height.MemPool ? 0 : bestHeight.Value - stx.Height.Value + 1,
+					Confirmations = stx.GetConfirmationCount(bestHeight),
 					TransactionId = stx.GetHash()
 				};
 				removeFromCache.Remove(entry.TransactionId);
@@ -171,7 +169,7 @@ namespace HBitcoin.TumbleBit.Services.HBitcoin
 				if(_KnownTransactions.Add(transaction.GetHash()))
 				{
 					_Transactions.Insert(0,
-						new RPCWalletEntry
+						new HBitcoinWalletEntry
 						{
 							Confirmations = confirmations,
 							TransactionId = transaction.GetHash()

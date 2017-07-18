@@ -183,6 +183,19 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
+		public static int GetBlockConfirmations(uint256 blockId)
+		{
+			var height = 0;
+			foreach(var header in HeaderChain.ToEnumerable(fromTip: true))
+			{
+				if(header.HashBlock == blockId)
+				{
+					height = header.Height;
+				}
+			}
+			return height;
+		}
+
 		private static ConcurrentChain HeaderChain
 		{
 			get
@@ -551,17 +564,17 @@ namespace HBitcoin.FullBlockSpv
 			return found;
 		}
 
-		public static bool TryGetHeader(Height height, out ChainedBlock creationHeader)
+		public static bool TryGetHeader(Height height, out ChainedBlock header)
 		{
-			creationHeader = null;
+			header = null;
 			try
 			{
 				if (_connectionParameters == null)
 					return false;
 
-				creationHeader = HeaderChain.GetBlock(height);
+				header = HeaderChain.GetBlock(height);
 
-				if (creationHeader == null)
+				if (header == null)
 					return false;
 				else return true;
 			}

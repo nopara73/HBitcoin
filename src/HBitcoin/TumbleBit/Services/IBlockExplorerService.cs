@@ -28,6 +28,5 @@ namespace HBitcoin.TumbleBit.Services
 		Task<uint256> WaitBlockAsync(uint256 currentBlock, CancellationToken cancellation);
 		void Track(Script scriptPubkey);
 		int GetBlockConfirmations(uint256 blockId);
-		bool TrackPrunedTransaction(Transaction transaction, MerkleBlock merkleProof);
 	}
 }

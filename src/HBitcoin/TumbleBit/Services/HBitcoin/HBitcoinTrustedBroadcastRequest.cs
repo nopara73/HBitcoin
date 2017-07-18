@@ -1,5 +1,5 @@
-﻿using NBitcoin;
-using NBitcoin.RPC;
+﻿using HBitcoin.FullBlockSpv;
+using NBitcoin;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -7,57 +7,28 @@ using System.Linq;
 
 namespace HBitcoin.TumbleBit.Services.HBitcoin
 {
-	public class RPCTrustedBroadcastService : ITrustedBroadcastService
+	public class HBitcoinTrustedBroadcastService : ITrustedBroadcastService
 	{
 		public class Record
 		{
-			public int Expiration
-			{
-				get; set;
-			}
-			public string Label
-			{
-				get;
-				set;
-			}
-
-			public TransactionType TransactionType
-			{
-				get; set;
-			}
-
-			public int Cycle
-			{
-				get; set;
-			}
-
-			public TrustedBroadcastRequest Request
-			{
-				get; set;
-			}
-
-			public uint Correlation
-			{
-				get; set;
-			}
+			public int Expiration { get; set; }
+			public string Label { get; set; }
+			public TransactionType TransactionType { get; set; }
+			public int Cycle { get; set; }
+			public TrustedBroadcastRequest Request { get; set; }
+			public uint Correlation { get; set; }
 		}
 
 		public class TxToRecord
 		{
-			public uint256 RecordHash
-			{
-				get; set;
-			}
-			public Transaction Transaction
-			{
-				get; set;
-			}
+			public uint256 RecordHash { get; set; }
+			public Transaction Transaction { get; set; }
 		}
 
-		public RPCTrustedBroadcastService(RPCClient rpc, IBroadcastService innerBroadcast, IBlockExplorerService explorer, IRepository repository, HBitcoinWalletCache cache, Tracker tracker)
+		public HBitcoinTrustedBroadcastService(WalletJob walletJob, IBroadcastService innerBroadcast, IBlockExplorerService explorer, IRepository repository, HBitcoinWalletCache cache, Tracker tracker)
 		{
 			_Repository = repository ?? throw new ArgumentNullException(nameof(repository));
-			_RPCClient = rpc ?? throw new ArgumentNullException(nameof(rpc));
+			_WalletJob = walletJob ?? throw new ArgumentNullException(nameof(walletJob));
 			_Broadcaster = innerBroadcast ?? throw new ArgumentNullException(nameof(innerBroadcast));
 			TrackPreviousScriptPubKey = true;
 			_BlockExplorer = explorer ?? throw new ArgumentNullException(nameof(explorer));
@@ -68,13 +39,10 @@ namespace HBitcoin.TumbleBit.Services.HBitcoin
 		private Tracker _Tracker;
 		private IBroadcastService _Broadcaster;
 
-		private readonly RPCClient _RPCClient;
-		public RPCClient RPCClient => _RPCClient;
+		private readonly WalletJob _WalletJob;
+		public WalletJob WalletJob => _WalletJob;
 
-		public bool TrackPreviousScriptPubKey
-		{
-			get; set;
-		}
+		public bool TrackPreviousScriptPubKey { get; set; }
 
 		public void Broadcast(int cycleStart, TransactionType transactionType, uint correlation, TrustedBroadcastRequest broadcast)
 		{
@@ -83,15 +51,15 @@ namespace HBitcoin.TumbleBit.Services.HBitcoin
 			if(broadcast.Key != null && !broadcast.Transaction.Inputs.Any(i => i.PrevOut.IsNull))
 				throw new InvalidOperationException("One of the input should be null");
 
-			var address = broadcast.PreviousScriptPubKey?.GetDestinationAddress(RPCClient.Network);
-			if(address != null && TrackPreviousScriptPubKey)
-				RPCClient.ImportAddress(address, "", false);
+			var prevScriptPubKey = broadcast.PreviousScriptPubKey;
+			if (prevScriptPubKey != null && TrackPreviousScriptPubKey)
+				_WalletJob.Tracker.TrackedScriptPubKeys.Add(prevScriptPubKey);
 
 			var height = _Cache.BlockCount;
 			var record = new Record();
 			//3 days expiration after now or broadcast date
 			var expirationBase = Math.Max(height, broadcast.BroadcastableHeight);
-			record.Expiration = expirationBase + (int)(TimeSpan.FromDays(3).Ticks / RPCClient.Network.Consensus.PowTargetSpacing.Ticks);
+			record.Expiration = expirationBase + (int)(TimeSpan.FromDays(3).Ticks / _WalletJob.Safe.Network.Consensus.PowTargetSpacing.Ticks);
 
 			record.Request = broadcast;
 			record.TransactionType = transactionType;
@@ -141,7 +109,7 @@ namespace HBitcoin.TumbleBit.Services.HBitcoin
 
 					if(!knownBroadcastedSet.Contains(txHash)
 						&& broadcast.Request.IsBroadcastableAt(height)
-						&& _Broadcaster.Broadcast(transaction))
+						&& _Broadcaster.BroadcastAsync(transaction).Result)
 					{
 						LogBroadcasted(broadcast);
 						broadcasted.Add(transaction);
@@ -164,7 +132,7 @@ namespace HBitcoin.TumbleBit.Services.HBitcoin
 
 								if(!knownBroadcastedSet.Contains(txHash)
 									&& broadcast.Request.IsBroadcastableAt(height)
-									&& _Broadcaster.Broadcast(transaction))
+									&& _Broadcaster.BroadcastAsync(transaction).Result)
 								{
 									LogBroadcasted(broadcast);
 									broadcasted.Add(transaction);

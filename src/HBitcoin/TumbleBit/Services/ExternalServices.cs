@@ -12,9 +12,9 @@ namespace HBitcoin.TumbleBit.Services
 
 			var cache = new HBitcoinWalletCache(walletJob, repository);
 			service.WalletService = new RPCWalletService(rpc);
-			service.BroadcastService = new RPCBroadcastService(rpc, cache, repository);
-			service.BlockExplorerService = new RPCBlockExplorerService(rpc, cache, repository);
-			service.TrustedBroadcastService = new RPCTrustedBroadcastService(rpc, service.BroadcastService, service.BlockExplorerService, repository, cache, tracker)
+			service.BroadcastService = new HBitcoinBroadcastService(walletJob, cache, repository);
+			service.BlockExplorerService = new HBitcoinBlockExplorerService(walletJob, cache, repository);
+			service.TrustedBroadcastService = new HBitcoinTrustedBroadcastService(walletJob, service.BroadcastService, service.BlockExplorerService, repository, cache, tracker)
 			{
 				//BlockExplorer will already track the addresses, since they used a shared bitcoind, no need of tracking again (this would overwrite labels)
 				TrackPreviousScriptPubKey = false
