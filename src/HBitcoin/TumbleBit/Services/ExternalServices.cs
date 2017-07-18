@@ -10,23 +10,7 @@ namespace HBitcoin.TumbleBit.Services
 			var info = rpc.SendCommand(RPCOperations.getinfo);
 			var minimumRate = new NBitcoin.FeeRate(NBitcoin.Money.Coins((decimal)(double)((Newtonsoft.Json.Linq.JValue)(info.Result["relayfee"])).Value * 2), 1000);
 
-			var service = new ExternalServices
-			{
-				FeeService = new RPCFeeService(rpc)
-				{
-					MinimumFeeRate = minimumRate
-				}
-			};
-
-			// on regtest the estimatefee always fails
-			if (rpc.Network == NBitcoin.Network.RegTest)
-			{
-				service.FeeService = new RPCFeeService(rpc)
-				{
-					MinimumFeeRate = minimumRate,
-					FallBackFeeRate = new NBitcoin.FeeRate(NBitcoin.Money.Satoshis(50), 1)
-				};
-			}
+			var service = new ExternalServices();
 
 			var cache = new RPCWalletCache(rpc, repository);
 			service.WalletService = new RPCWalletService(rpc);
@@ -39,25 +23,10 @@ namespace HBitcoin.TumbleBit.Services
 			};
 			return service;
 		}
-		public IFeeService FeeService
-		{
-			get; set;
-		}
-		public IWalletService WalletService
-		{
-			get; set;
-		}
-		public IBroadcastService BroadcastService
-		{
-			get; set;
-		}
-		public IBlockExplorerService BlockExplorerService
-		{
-			get; set;
-		}
-		public ITrustedBroadcastService TrustedBroadcastService
-		{
-			get; set;
-		}
+
+		public IWalletService WalletService { get; set; }
+		public IBroadcastService BroadcastService { get; set; }
+		public IBlockExplorerService BlockExplorerService { get; set; }
+		public ITrustedBroadcastService TrustedBroadcastService { get; set; }
 	}
 }

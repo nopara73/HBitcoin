@@ -9,6 +9,7 @@ using HBitcoin.TumbleBit.ClassicTumbler.Models;
 using System.Threading;
 using System.Diagnostics;
 using HBitcoin.KeyManagement;
+using HBitcoin.Fees;
 
 namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 {
@@ -178,7 +179,7 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 							ClientChannelNegotiation.ReceiveTumblerEscrowKey(key.PubKey, key.KeyIndex);
 							//Client create the escrow
 							var escrowTxOut = ClientChannelNegotiation.BuildClientEscrowTxOut();
-							feeRate = GetFeeRate();
+							feeRate = await GetFeeRateAsync(ctsToken).ConfigureAwait(false);
 
 							Transaction clientEscrowTx = null;
 							try
@@ -254,7 +255,7 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 							var cashoutDestination = Runtime.WalletJob.GetUnusedScriptPubKeys(outputAccount, HdPathType.Receive).First();
 							Tracker.AddressCreated(cycle.Start, TransactionType.TumblerCashout, cashoutDestination, correlation);
 
-							feeRate = GetFeeRate();
+							feeRate = await GetFeeRateAsync(ctsToken).ConfigureAwait(false);
 							var sigReq = PromiseClientSession.CreateSignatureRequest(cashoutDestination, feeRate);
 							var commiments = await bob.SignHashesAsync(PromiseClientSession.Id, sigReq, ctsToken).ConfigureAwait(false);
 							PromiseClientRevelation revelation = PromiseClientSession.Reveal(commiments);
@@ -275,7 +276,7 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 
 								if(SolverClientSession.Status == SolverClientStates.WaitingGeneratePuzzles)
 								{
-									feeRate = GetFeeRate();
+									feeRate = await GetFeeRateAsync(ctsToken).ConfigureAwait(false);
 									alice = Runtime.CreateTumblerClient(new Identity(Role.Alice, cycle.Start));
 									var puzzles = SolverClientSession.GeneratePuzzles();
 									var commmitments = await alice.SolvePuzzlesAsync(SolverClientSession.Id, puzzles, ctsToken).ConfigureAwait(false);
@@ -358,7 +359,11 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 			return tx;
 		}
 
-		private FeeRate GetFeeRate() => Services.FeeService.GetFeeRate();
+		private async Task<FeeRate> GetFeeRateAsync(CancellationToken ctsToken)
+		{
+			Money feePerBytes = await Runtime.WalletJob.FeeJob.GetFeePerBytesAsync(FeeType.High, ctsToken).ConfigureAwait(false);
+			return new FeeRate(feePerK: feePerBytes / 1000);
+		}
 
 		private static void Assert(bool test, string error)
 		{
