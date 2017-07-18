@@ -227,8 +227,15 @@ namespace HBitcoin.FullBlockSpv
 			TorHttpClient = new HttpClient(handler);
 			ControlPortClient = controlPortClient;
 
-			if (accountsToTrack == null || !accountsToTrack.Any())
+			if(accountsToTrack == null || accountsToTrack.Count() < 2)
 			{
+				if (tumbleBitServerUri != null)
+				{
+					throw new NotSupportedException("To use TumbleBit you must specify at least two accounts");
+				}
+			}
+			if (accountsToTrack == null || !accountsToTrack.Any())
+			{				
 				SafeAccounts = new ConcurrentHashSet<SafeAccount>();
 			}
 			else SafeAccounts = new ConcurrentHashSet<SafeAccount>(accountsToTrack);

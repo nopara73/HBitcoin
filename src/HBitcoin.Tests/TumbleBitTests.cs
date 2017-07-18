@@ -36,7 +36,7 @@ namespace HBitcoin.Tests
 			Debug.WriteLine($"Unique Safe ID: {safe.UniqueId}");
 
 			// create walletjob
-			WalletJob walletJob = new WalletJob(Helpers.SocksPortHandler, Helpers.ControlPortClient, safe, new Uri("http://t4cqwqlvswcyyagg.onion/api/v1/tumblers/310586435471416ca16058c1fb9ed3c868f239b9"));
+			WalletJob walletJob = new WalletJob(Helpers.SocksPortHandler, Helpers.ControlPortClient, safe, new Uri("http://t4cqwqlvswcyyagg.onion/api/v1/tumblers/310586435471416ca16058c1fb9ed3c868f239b9"), accountsToTrack: new SafeAccount[] { new SafeAccount(1), new SafeAccount(2)});
 			
 			// start syncing
 			var cts = new CancellationTokenSource();
