@@ -1,4 +1,4 @@
-﻿namespace HBitcoin.Models
+﻿namespace HBitcoin.Fees
 {
 	public enum FeeType
     {

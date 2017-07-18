@@ -10,6 +10,7 @@ using HBitcoin.KeyManagement;
 using HBitcoin.Models;
 using NBitcoin;
 using Xunit;
+using HBitcoin.Fees;
 
 namespace HBitcoin.Tests
 {
