@@ -35,10 +35,10 @@ namespace HBitcoin.FullBlockSpv
 		public bool TracksDefaultSafe { get; private set; }
 		public ConcurrentHashSet<SafeAccount> SafeAccounts { get; private set; }
 
-		private readonly QBitNinjaClient _torQBitClient;
-        private readonly QBitNinjaClient _noTorQBitClient;
-        private static HttpClient _torHttpClient;
-		private static DotNetTor.ControlPort.Client _controlPortClient;
+		public QBitNinjaClient TorQBitClient { get; }
+        public QBitNinjaClient NoTorQBitClient { get; }
+		public HttpClient TorHttpClient { get; }
+		public DotNetTor.ControlPort.Client ControlPortClient { get; }
 
 		public BlockDownloader BlockDownloader;		
 
@@ -221,11 +221,11 @@ namespace HBitcoin.FullBlockSpv
 			CurrentNetwork = safeToTrack.Network;
 			MemPoolJob.Enabled = false;
 
-            _noTorQBitClient = new QBitNinjaClient(safeToTrack.Network);
-			_torQBitClient = new QBitNinjaClient(safeToTrack.Network);
-			_torQBitClient.SetHttpMessageHandler(handler);
-			_torHttpClient = new HttpClient(handler);
-			_controlPortClient = controlPortClient;
+            NoTorQBitClient = new QBitNinjaClient(safeToTrack.Network);
+			TorQBitClient = new QBitNinjaClient(safeToTrack.Network);
+			TorQBitClient.SetHttpMessageHandler(handler);
+			TorHttpClient = new HttpClient(handler);
+			ControlPortClient = controlPortClient;
 
 			if (accountsToTrack == null || !accountsToTrack.Any())
 			{
@@ -831,7 +831,7 @@ namespace HBitcoin.FullBlockSpv
 		{
 			try
 			{
-				await _controlPortClient.ChangeCircuitAsync().ConfigureAwait(false);
+				await ControlPortClient.ChangeCircuitAsync().ConfigureAwait(false);
 				var queryFeeTask = QueryFeePerBytesAsync(feeType);
 				AssertAccount(account);
 
@@ -1022,10 +1022,10 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-		private static async Task<Money> QueryFeePerBytesAsync(FeeType feeType)
+		private async Task<Money> QueryFeePerBytesAsync(FeeType feeType)
 		{
 			HttpResponseMessage response =
-				await _torHttpClient.GetAsync(@"http://api.blockcypher.com/v1/btc/main", HttpCompletionOption.ResponseContentRead)
+				await TorHttpClient.GetAsync(@"http://api.blockcypher.com/v1/btc/main", HttpCompletionOption.ResponseContentRead)
 					.ConfigureAwait(false);
 
 			var json = JObject.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
@@ -1177,7 +1177,7 @@ namespace HBitcoin.FullBlockSpv
 
 			try
 			{
-				await _controlPortClient.ChangeCircuitAsync().ConfigureAwait(false);
+				await ControlPortClient.ChangeCircuitAsync().ConfigureAwait(false);
 				var successfulResult = new SendTransactionResult
 				{
 					Success = true,
@@ -1197,7 +1197,7 @@ namespace HBitcoin.FullBlockSpv
 						if (counter % 2 == 0)
 						{
 							Debug.WriteLine("QBit...");
-							qbitResponse = await _torQBitClient.Broadcast(tx).ConfigureAwait(false);
+							qbitResponse = await TorQBitClient.Broadcast(tx).ConfigureAwait(false);
 						}
 						else
 						{
@@ -1208,7 +1208,7 @@ namespace HBitcoin.FullBlockSpv
 
 							var content = new StringContent(new JObject(new JProperty("hex", tx.ToHex())).ToString(), Encoding.UTF8,
 								"application/json");
-							smartBitResponse = await _torHttpClient.PostAsync(post, content).ConfigureAwait(false);
+							smartBitResponse = await TorHttpClient.PostAsync(post, content).ConfigureAwait(false);
 						}
 					}
 					catch
@@ -1298,7 +1298,7 @@ namespace HBitcoin.FullBlockSpv
 				var config = new TumblerClientConfiguration();
 				config.Load(CurrentNetwork, TumbleBitServerUri);
 
-				TumbleBitRuntime = await TumblerClientRuntime.FromConfigurationAsync(config, _torHttpClient, _controlPortClient, ctsToken).ConfigureAwait(false);
+				TumbleBitRuntime = await TumblerClientRuntime.FromConfigurationAsync(config, this, ctsToken).ConfigureAwait(false);
 				ctsToken.ThrowIfCancellationRequested();
 
 				TumbleBitBroadcaster = TumbleBitRuntime.CreateBroadcasterJob();

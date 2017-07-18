@@ -1,4 +1,5 @@
-﻿using NBitcoin;
+﻿using HBitcoin.KeyManagement;
+using NBitcoin;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -60,7 +61,7 @@ namespace HBitcoin.TumbleBit.Services
 			return broadcasted.ToArray();
 		}
 
-		protected override void StartCore(CancellationToken cancellationToken)
+		protected override void StartCore(CancellationToken cancellationToken, SafeAccount outputAccount)
 		{
 			Task.Run(async () =>
 			{

@@ -1,4 +1,5 @@
-﻿using NBitcoin;
+﻿using HBitcoin.KeyManagement;
+using NBitcoin;
 using System;
 using System.Diagnostics;
 using System.Linq;
@@ -19,7 +20,7 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 
 		public override string Name => "mixer";
 
-		protected override void StartCore(CancellationToken cancellationToken)
+		protected override void StartCore(CancellationToken cancellationToken, SafeAccount outputAccount)
 		{
 			Task.Run(async() =>
 			{
@@ -54,7 +55,7 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 							var machine = new PaymentStateMachine(Runtime, state);
 							try
 							{
-								await machine.UpdateAsync(default(CancellationToken)).ConfigureAwait(false);
+								await machine.UpdateAsync(default(CancellationToken), outputAccount).ConfigureAwait(false);
 								machine.InvalidPhaseCount = 0;
 							}
 							catch(PrematureRequestException)

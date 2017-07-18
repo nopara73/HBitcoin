@@ -8,6 +8,7 @@ using HBitcoin.TumbleBit.Services;
 using HBitcoin.TumbleBit.ClassicTumbler.Models;
 using System.Threading;
 using System.Diagnostics;
+using HBitcoin.KeyManagement;
 
 namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 {
@@ -73,7 +74,6 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 			get;
 			private set;
 		}
-		public IDestinationWallet DestinationWallet => Runtime.DestinationWallet;
 
 		public bool Cooperative => Runtime.Cooperative;
 
@@ -113,7 +113,7 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 			return s;
 		}
 
-		public async Task UpdateAsync(CancellationToken ctsToken)
+		public async Task UpdateAsync(CancellationToken ctsToken, SafeAccount outputAccount)
 		{
 			var height = Services.BlockExplorerService.GetCurrentHeight();
 			CycleParameters cycle;
@@ -251,7 +251,7 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 							Tracker.TransactionCreated(cycle.Start, TransactionType.TumblerEscrow, PromiseClientSession.EscrowedCoin.Outpoint.Hash, correlation);
 
 							//Channel is done, now need to run the promise protocol to get valid puzzle
-							var cashoutDestination = DestinationWallet.GetNewDestination();
+							var cashoutDestination = Runtime.WalletJob.GetUnusedScriptPubKeys(outputAccount, HdPathType.Receive).First();
 							Tracker.AddressCreated(cycle.Start, TransactionType.TumblerCashout, cashoutDestination, correlation);
 
 							feeRate = GetFeeRate();

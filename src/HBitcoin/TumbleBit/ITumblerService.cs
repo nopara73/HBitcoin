@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using HBitcoin.KeyManagement;
+using System.Threading.Tasks;
 
 namespace HBitcoin.TumbleBit
 {
@@ -8,7 +9,7 @@ namespace HBitcoin.TumbleBit
 		{
 			get;
 		}
-		void Start();
+		void Start(SafeAccount outputAccount);
 		Task Stop();
 		bool Started
 		{

@@ -85,7 +85,7 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 			{
 				var start = DateTime.Now;
 				Debug.WriteLine($"Changing identity to {_identity}");
-				await _runtime.ControlPortClient.ChangeCircuitAsync(ctsToken).ConfigureAwait(false);
+				await _runtime.WalletJob.ControlPortClient.ChangeCircuitAsync(ctsToken).ConfigureAwait(false);
 				var takelong = DateTime.Now - start;
 				File.AppendAllText("torchangelog.txt", Environment.NewLine + Environment.NewLine + $"CHANGE IP: {(int)takelong.TotalSeconds} sec" + Environment.NewLine);
 			}
@@ -96,7 +96,7 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 			HttpResponseMessage result;
 			try
 			{
-				result = await _runtime.TorHttpClient.SendAsync(message, ctsToken).ConfigureAwait(false);
+				result = await _runtime.WalletJob.TorHttpClient.SendAsync(message, ctsToken).ConfigureAwait(false);
 			}
 			catch (Exception ex)
 			{

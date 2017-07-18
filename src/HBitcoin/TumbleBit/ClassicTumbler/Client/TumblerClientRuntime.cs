@@ -10,6 +10,7 @@ using System.Threading;
 using System.Diagnostics;
 using DotNetTor;
 using System.Net.Http;
+using HBitcoin.FullBlockSpv;
 
 namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 {
@@ -23,14 +24,13 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 
 	public class TumblerClientRuntime : IDisposable
 	{
-		public HttpClient TorHttpClient { get; set; }
-		public DotNetTor.ControlPort.Client ControlPortClient { get; set; }
-		public static async Task<TumblerClientRuntime> FromConfigurationAsync(TumblerClientConfiguration configuration, HttpClient torHttpClient, DotNetTor.ControlPort.Client controlPortClient, CancellationToken ctsToken)
+		public WalletJob WalletJob { get; private set; }
+		public static async Task<TumblerClientRuntime> FromConfigurationAsync(TumblerClientConfiguration configuration, WalletJob walletJob, CancellationToken ctsToken)
 		{
 			var runtime = new TumblerClientRuntime();
 			try
 			{
-				await runtime.ConfigureAsync(configuration, torHttpClient, controlPortClient, ctsToken).ConfigureAwait(false);
+				await runtime.ConfigureAsync(configuration, walletJob, ctsToken).ConfigureAwait(false);
 			}
 			catch
 			{
@@ -39,10 +39,9 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 			}
 			return runtime;
 		}
-		public async Task ConfigureAsync(TumblerClientConfiguration configuration, HttpClient torHttpClient, DotNetTor.ControlPort.Client controlPortClient, CancellationToken ctsToken)
+		public async Task ConfigureAsync(TumblerClientConfiguration configuration, WalletJob walletJob, CancellationToken ctsToken)
 		{
-			TorHttpClient = torHttpClient;
-			ControlPortClient = controlPortClient;
+			WalletJob = walletJob;
 
 			Network = configuration.Network;
 			TumblerServer = configuration.TumblerServer;
@@ -53,10 +52,8 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 			Cooperative = configuration.Cooperative;
 			Repository = dbreeze;
 			_Disposables.Add(dbreeze);
-			Tracker = new Tracker(dbreeze, Network);
+			Tracker = new Services.Tracker(dbreeze, Network);
 			Services = ExternalServices.CreateFromRPCClient(rpc, dbreeze, Tracker);
-
-			DestinationWallet = new ClientDestinationWallet(configuration.OutputWallet.RootKey, configuration.OutputWallet.KeyPath, dbreeze, configuration.Network);
 
 			TumblerParameters = dbreeze.Get<ClassicTumblerParameters>("Configuration", configuration.TumblerServer.AbsoluteUri);
 			var parameterHash = ClassicTumblerParameters.ExtractHashFromUrl(configuration.TumblerServer);
@@ -138,11 +135,10 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 				disposable.Dispose();
 			_Disposables.Clear();
 		}
-
-		public IDestinationWallet DestinationWallet { get; set; }
+		
 		public Network Network { get; set; }
 		public ExternalServices Services { get; set; }
-		public Tracker Tracker { get; set; }
+		public Services.Tracker Tracker { get; set; }
 		public ClassicTumblerParameters TumblerParameters { get; set; }
 		public DBreezeRepository Repository { get; set; }
 	}
