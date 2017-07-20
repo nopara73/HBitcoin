@@ -3,7 +3,6 @@ using System.Text;
 using System.Linq;
 using System.IO;
 using NBitcoin;
-using HBitcoin.TumbleBit.Configuration;
 using System.Diagnostics;
 using System.Net.Http;
 
@@ -15,7 +14,6 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 		public Network Network { get; set; }
 		public bool Cooperative { get; set; }
 		public Uri TumblerServer { get; set; }
-		public RPCArgs RPCArgs { get; set; } = new RPCArgs();
 
 		public TumblerClientConfiguration Load(Network netwok, Uri tumblerServer)
 		{
@@ -27,8 +25,6 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 			
 			Cooperative = true;
 			TumblerServer = tumblerServer;
-
-			RPCArgs = RPCArgs.Parse(Network);
 
 			try
 			{

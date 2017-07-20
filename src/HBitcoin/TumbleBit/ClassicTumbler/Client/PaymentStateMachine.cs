@@ -114,7 +114,7 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 			return s;
 		}
 
-		public async Task UpdateAsync(CancellationToken ctsToken, SafeAccount outputAccount)
+		public async Task UpdateAsync(CancellationToken ctsToken, SafeAccount inputAccount, SafeAccount outputAccount)
 		{
 			var height = Services.BlockExplorerService.GetCurrentHeight();
 			CycleParameters cycle;
@@ -184,15 +184,15 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 							Transaction clientEscrowTx = null;
 							try
 							{
-								clientEscrowTx = Services.WalletService.FundTransaction(escrowTxOut, feeRate);
+								clientEscrowTx = await Services.WalletService.FundTransaction(inputAccount, escrowTxOut).ConfigureAwait(false);
 							}
-							catch(NotEnoughFundsException ex)
+							catch(InvalidOperationException ex) when(ex.Message == "Not enough funds")
 							{
-								Debug.WriteLine($"Not enough funds in the wallet to tumble. Missing about {ex.Missing}. Denomination is {Parameters.Denomination}.");
+								Debug.WriteLine($"Not enough funds in the wallet to tumble. Denomination is {Parameters.Denomination}.");
 								break;
 							}
 
-							var redeemDestination = Services.WalletService.GenerateAddress().ScriptPubKey;
+							var redeemDestination = Services.WalletService.GenerateAddress(inputAccount).ScriptPubKey;
 							SolverClientSession = ClientChannelNegotiation.SetClientSignedTransaction(clientEscrowTx, redeemDestination);
 
 

@@ -47,7 +47,7 @@ namespace HBitcoin.TumbleBit.Services
 			return broadcasted.ToArray();
 		}
 
-		protected override void StartCore(CancellationToken cancellationToken, SafeAccount outputAccount)
+		protected override void StartCore(CancellationToken cancellationToken, SafeAccount inputAccount, SafeAccount outputAccount)
 		{
 			Task.Run(async () =>
 			{

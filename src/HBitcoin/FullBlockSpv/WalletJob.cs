@@ -1046,7 +1046,7 @@ namespace HBitcoin.FullBlockSpv
 			}
 		}
 
-		private static HashSet<Coin> SelectCoinsToSpend(IDictionary<Coin, bool> unspentCoins, Money totalOutAmount)
+		internal static HashSet<Coin> SelectCoinsToSpend(IDictionary<Coin, bool> unspentCoins, Money totalOutAmount)
 		{
 			var coinsToSpend = new HashSet<Coin>();
 			var unspentConfirmedCoins = new List<Coin>();

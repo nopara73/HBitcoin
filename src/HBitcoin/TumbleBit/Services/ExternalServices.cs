@@ -1,17 +1,17 @@
-﻿using NBitcoin.RPC;
-using HBitcoin.TumbleBit.Services.HBitcoin;
+﻿using HBitcoin.TumbleBit.Services.HBitcoin;
 using HBitcoin.FullBlockSpv;
+using HBitcoin.KeyManagement;
 
 namespace HBitcoin.TumbleBit.Services
 {
 	public class ExternalServices
     {
-		public static ExternalServices CreateFromRPCClient(RPCClient rpc, WalletJob walletJob, IRepository repository, Tracker tracker)
+		public static ExternalServices CreateFromHBitcoinClient(WalletJob walletJob, IRepository repository, Tracker tracker)
 		{
 			var service = new ExternalServices();
 
 			var cache = new HBitcoinWalletCache(walletJob, repository);
-			service.WalletService = new RPCWalletService(rpc);
+			service.WalletService = new HBitcoinWalletService(walletJob);
 			service.BroadcastService = new HBitcoinBroadcastService(walletJob, cache, repository);
 			service.BlockExplorerService = new HBitcoinBlockExplorerService(walletJob, cache, repository);
 			service.TrustedBroadcastService = new HBitcoinTrustedBroadcastService(walletJob, service.BroadcastService, service.BlockExplorerService, repository, cache, tracker)
@@ -22,7 +22,7 @@ namespace HBitcoin.TumbleBit.Services
 			return service;
 		}
 
-		public IWalletService WalletService { get; set; }
+		public HBitcoinWalletService WalletService { get; set; }
 		public IBroadcastService BroadcastService { get; set; }
 		public IBlockExplorerService BlockExplorerService { get; set; }
 		public ITrustedBroadcastService TrustedBroadcastService { get; set; }

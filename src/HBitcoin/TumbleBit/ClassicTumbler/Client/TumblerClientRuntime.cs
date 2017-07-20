@@ -2,15 +2,14 @@
 using System.Collections.Generic;
 using NBitcoin;
 using System.IO;
-using NBitcoin.RPC;
 using System.Threading.Tasks;
 using HBitcoin.TumbleBit.Services;
-using HBitcoin.TumbleBit.Configuration;
 using System.Threading;
 using System.Diagnostics;
 using DotNetTor;
 using System.Net.Http;
 using HBitcoin.FullBlockSpv;
+using HBitcoin.KeyManagement;
 
 namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 {
@@ -46,14 +45,12 @@ namespace HBitcoin.TumbleBit.ClassicTumbler.Client
 			Network = configuration.Network;
 			TumblerServer = configuration.TumblerServer;
 
-			RPCClient rpc = configuration.RPCArgs.ConfigureRPCClient(configuration.Network);
-
 			var dbreeze = new DBreezeRepository(Path.Combine(configuration.DataDir, "db2"));
 			Cooperative = configuration.Cooperative;
 			Repository = dbreeze;
 			_Disposables.Add(dbreeze);
 			Tracker = new Services.Tracker(dbreeze, Network);
-			Services = ExternalServices.CreateFromRPCClient(rpc, walletJob, dbreeze, Tracker);
+			Services = ExternalServices.CreateFromHBitcoinClient(walletJob, dbreeze, Tracker);
 
 			TumblerParameters = dbreeze.Get<ClassicTumblerParameters>("Configuration", configuration.TumblerServer.AbsoluteUri);
 			var parameterHash = ClassicTumblerParameters.ExtractHashFromUrl(configuration.TumblerServer);

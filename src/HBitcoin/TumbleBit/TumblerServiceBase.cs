@@ -12,17 +12,17 @@ namespace HBitcoin.TumbleBit
 		private TaskCompletionSource<bool> _Stopping;
 		public abstract string Name { get; }
 
-		public void Start(SafeAccount outputAccount)
+		public void Start(SafeAccount inputAccount, SafeAccount outputAccount)
 		{
 			if(Started)
 				throw new InvalidOperationException("Service already started");
 			_Stopping = new TaskCompletionSource<bool>();
 			_StopSource = new CancellationTokenSource();
 			_Stop = _StopSource.Token;
-			StartCore(_Stop, outputAccount);
+			StartCore(_Stop, inputAccount, outputAccount);
 		}
 
-		protected abstract void StartCore(CancellationToken cancellationToken, SafeAccount outputAccount);
+		protected abstract void StartCore(CancellationToken cancellationToken, SafeAccount inputAccount, SafeAccount outputAccount);
 
 		protected void Stopped()
 		{

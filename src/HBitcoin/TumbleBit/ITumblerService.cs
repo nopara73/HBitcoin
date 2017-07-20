@@ -9,7 +9,7 @@ namespace HBitcoin.TumbleBit
 		{
 			get;
 		}
-		void Start(SafeAccount outputAccount);
+		void Start(SafeAccount inputAccount, SafeAccount outputAccount);
 		Task Stop();
 		bool Started
 		{

@@ -1,5 +1,4 @@
 ﻿using NBitcoin;
-using NBitcoin.RPC;
 using System;
 using System.Text;
 using System.Threading.Tasks;
@@ -66,12 +65,6 @@ namespace HBitcoin.TumbleBit
 				money = Money.Satoshis(satoshis);
 			}
 		}
-
-		public static RPCResponse SendCommandNoThrows(this RPCClient client, string commandName, params object[] parameters) => client.SendCommand(new RPCRequest
-		{
-			Method = commandName,
-			Params = parameters
-		}, throwIfRPCError: false);
 
 		public static ScriptCoin Clone(this ScriptCoin scriptCoin) => new ScriptCoin(scriptCoin, scriptCoin.Redeem);
 
