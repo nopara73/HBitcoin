@@ -316,15 +316,14 @@ namespace HBitcoin.FullBlockSpv
 			Nodes.ConnectedNodes.Added += delegate { OnConnectedNodeCountChanged(); };
 
 			Tracker.BestHeightChanged += delegate { OnBestHeightChanged(); };
-
-			if (UseTumbleBit)
-			{
-				InitializeTumbleBitAsync(default(CancellationToken)).Wait();
-			}
 		}
 
 		public async Task StartAsync(CancellationToken ctsToken)
 		{
+			if (UseTumbleBit)
+			{
+				await InitializeTumbleBitAsync(ctsToken).ConfigureAwait(false);
+			}
 			State = WalletState.SyncingHeaders;
 			Nodes.Connect();
 
