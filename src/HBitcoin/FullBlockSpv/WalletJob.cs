@@ -19,8 +19,6 @@ using Newtonsoft.Json.Linq;
 using QBitNinja.Client;
 using QBitNinja.Client.Models;
 using DotNetTor.SocksPort;
-using HBitcoin.TumbleBit.ClassicTumbler.Client;
-using HBitcoin.TumbleBit.Services;
 using DotNetTor;
 using HBitcoin.Fees;
 
@@ -227,11 +225,10 @@ namespace HBitcoin.FullBlockSpv
 
 		#endregion
 
-		public WalletJob(SocksPortHandler handler, DotNetTor.ControlPort.Client controlPortClient, Safe safeToTrack, Uri tumbleBitServerUri = null, bool trackDefaultSafe = true, params SafeAccount[] accountsToTrack)
+		public WalletJob(SocksPortHandler handler, DotNetTor.ControlPort.Client controlPortClient, Safe safeToTrack, bool trackDefaultSafe = true, params SafeAccount[] accountsToTrack)
 		{
 			_creationHeight = Height.Unknown;
 			_tracker = null;
-			TumbleBitServerUri = tumbleBitServerUri;
 
 			Safe = safeToTrack;
 			CurrentNetwork = safeToTrack.Network;
@@ -247,10 +244,7 @@ namespace HBitcoin.FullBlockSpv
 
 			if (accountsToTrack == null || accountsToTrack.Count() < 2)
 			{
-				if (tumbleBitServerUri != null)
-				{
-					throw new NotSupportedException("To use TumbleBit you must specify at least two accounts");
-				}
+
 			}
 			if (accountsToTrack == null || !accountsToTrack.Any())
 			{
@@ -320,10 +314,6 @@ namespace HBitcoin.FullBlockSpv
 
 		public async Task StartAsync(CancellationToken ctsToken)
 		{
-			if (UseTumbleBit)
-			{
-				await InitializeTumbleBitAsync(ctsToken).ConfigureAwait(false);
-			}
 			State = WalletState.SyncingHeaders;
 			Nodes.Connect();
 
@@ -343,7 +333,6 @@ namespace HBitcoin.FullBlockSpv
 			State = WalletState.NotStarted;
 			await SaveAllChangedAsync().ConfigureAwait(false);
 			Nodes.Dispose();
-			if (TumbleBitRuntime != null) TumbleBitRuntime.Dispose();
 		}
 
 		#region SafeTracking
@@ -1273,52 +1262,6 @@ namespace HBitcoin.FullBlockSpv
 		{
 			public bool Success;
 			public string FailingReason;
-		}
-
-		#endregion
-
-		#region TumbleBit
-
-		public Uri TumbleBitServerUri { get; private set; } = null;
-		public bool UseTumbleBit => TumbleBitServerUri != null;
-		public TumblerClientRuntime TumbleBitRuntime { get; private set; } = null;
-		public StateMachinesExecutor TumbleBitStateMachine { get; private set; } = null;
-		public BroadcasterJob TumbleBitBroadcaster { get; private set; } = null;
-		public bool TumbleBitSetupSuccessful => UseTumbleBit && TumbleBitRuntime != null && TumbleBitStateMachine != null && TumbleBitBroadcaster != null;
-
-		private async Task InitializeTumbleBitAsync(CancellationToken ctsToken)
-		{
-			if (!UseTumbleBit) throw new InvalidOperationException("TumbleBit is configured not to be used");
-
-			try
-			{
-				ctsToken.ThrowIfCancellationRequested();
-				var config = new TumblerClientConfiguration();
-				config.Load(CurrentNetwork, TumbleBitServerUri);
-
-				TumbleBitRuntime = await TumblerClientRuntime.FromConfigurationAsync(config, this, ctsToken).ConfigureAwait(false);
-				ctsToken.ThrowIfCancellationRequested();
-
-				TumbleBitBroadcaster = TumbleBitRuntime.CreateBroadcasterJob();
-				TumbleBitStateMachine = TumbleBitRuntime.CreateStateMachineJob();
-				ctsToken.ThrowIfCancellationRequested();
-			}
-			catch (Exception ex)
-			{
-				if (TumbleBitRuntime != null)
-				{
-					TumbleBitRuntime.Dispose();
-					TumbleBitRuntime = null;
-				}
-				TumbleBitStateMachine = null;
-				TumbleBitBroadcaster = null;
-
-				if (ex is OperationCanceledException
-					|| ex is TorException) // then the tumbler is probably offline
-				{
-					return;
-				}
-			}
 		}
 
 		#endregion
