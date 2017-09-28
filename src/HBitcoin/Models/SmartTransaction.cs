@@ -1,13 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using HBitcoin.Models;
 using NBitcoin;
 
 namespace HBitcoin.Models
 {
-    public class SmartTransaction: IEquatable<SmartTransaction>
+	public class SmartTransaction: IEquatable<SmartTransaction>
 	{
 		#region Members
 		
@@ -17,7 +13,10 @@ namespace HBitcoin.Models
 		public bool Confirmed => Height.Type == HeightType.Chain;
 		public uint256 GetHash() => Transaction.GetHash();
 
-        private readonly DateTimeOffset? _firstSeenIfMemPoolHeight = null;
+		public int GetConfirmationCount(Height bestHeight) => Height == Height.MemPool ? 0 : bestHeight.Value - Height.Value + 1;
+
+
+		private readonly DateTimeOffset? _firstSeenIfMemPoolHeight = null;
         /// <summary>
         /// if Height is MemPool it's first seen, else null, 
         /// only exists in memory,

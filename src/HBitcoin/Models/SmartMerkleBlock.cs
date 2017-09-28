@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using ConcurrentCollections;
-using HBitcoin.Models;
 using NBitcoin;
 
 namespace HBitcoin.Models
