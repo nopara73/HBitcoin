@@ -1,3 +1,6 @@
+# Attention!  
+I moved the development of this library under the [HiddenWallet](https://github.com/nopara73/HiddenWallet/) repository, however NuGet support is discontinued.  
+
 # HBitcoin
 Privacy focused Bitcoin library on top of NBitcoin for .NET Core.
 
